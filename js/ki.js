@@ -1,4 +1,4 @@
-/* Einfache Trainings-CPU / Dummy für Solo-Testmodus. v2.0 (Special-Cooldown, Distanzen ×4). */
+/* Trainings-CPU / Solo-KI. v2.3 — Anti-Air, Wakeup, smarter Special. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -23,49 +23,61 @@
     var dist = Math.abs(dx);
     var tick = st.tick | 0;
     var rng = ((tick * 1103515245 + seite * 12345) >>> 0) % 1000;
-
-    // Facing: nach innen laufen
     var nachRechts = dx > 0;
 
-    // Block wenn Gegner angreift und nah
+    // v2.3: Anti-Air — springender Gegner nah → stehender Punch / leicht zurück
+    var foeAir = !foe.grounded && foe.vy < 4;
+    if (foeAir && dist < 220) {
+      if (nachRechts) inp.l = true; else inp.r = true;
+      if (me.stun <= 0 && !me.atk && me.grounded && dist < 168) {
+        if ((rng % 3) === 0) inp.b = true; else inp.a = true;
+      }
+      return inp;
+    }
+
+    // v2.3: Wakeup — nach eigenem Stun erst blocken, nicht sofort special
+    if (me.stun > 0) return copy(idle);
+    if (me._kiWakeGuard && me._kiWakeGuard > 0) {
+      me._kiWakeGuard--;
+      if (nachRechts) inp.l = true; else inp.r = true;
+      if ((rng % 4) === 0) inp.d = true;
+      return inp;
+    }
+
     var foeAtk = foe.atk;
     var foeThreat = foeAtk && dist < 280;
     if (foeThreat || (foe.stun <= 0 && dist < 144 && (rng % 7) === 0)) {
       if (nachRechts) inp.l = true; else inp.r = true;
-      // gelegentlich Duck-Block gegen Lows
       if (foeAtk && foeAtk.m && foeAtk.m.low) inp.d = true;
       else if ((rng % 5) === 0) inp.d = true;
       return inp;
     }
 
-    // Abstand halten / annähern
     if (dist > 232) {
       if (nachRechts) inp.r = true; else inp.l = true;
     } else if (dist < 88) {
-      // leicht zurückweichen
       if (nachRechts) inp.l = true; else inp.r = true;
     } else if ((rng % 11) < 3) {
       if (nachRechts) inp.r = true; else inp.l = true;
     }
 
-    // Jump selten
     if (dist > 160 && dist < 360 && (rng % 90) === 0 && me.grounded) inp.u = true;
 
-    // Angriffe — nur wenn idle und im Range; Special mit Cooldown (~90 Ticks)
-    if (me.stun <= 0 && !me.atk && me.grounded && dist < 288) {
+    if (!me.atk && me.grounded && dist < 288) {
       var roll = rng % 100;
       var thresh = Math.floor(aggressiv * 100);
       var specialReady = (tick - (me._kiSpecialAt || -999)) > 90;
+      // v2.3: kein Special wenn Gegner klar backt (blocking-ish: rückwärts + nah)
+      var foeBacking = (nachRechts ? foe.input && foe.input.l : foe.input && foe.input.r);
       if (roll < thresh * 0.45 && dist < 136) inp.a = true;
       else if (roll < thresh * 0.65 && dist < 168) inp.b = true;
-      else if (specialReady && roll < thresh * 0.78 && dist < 280) {
+      else if (specialReady && !foeBacking && roll < thresh * 0.78 && dist < 280) {
         inp.c = true;
         me._kiSpecialAt = tick;
       }
-      else if (roll < thresh * 0.85) inp.d = true; // duck bait
+      else if (roll < thresh * 0.85) inp.d = true;
     }
 
-    // Dummy-Modus: wenig Angriff, mehr stehen/blocken
     if (opts.dummy) {
       inp.a = false; inp.b = false; inp.u = false;
       if ((rng % 40) !== 0) inp.c = false;
@@ -76,6 +88,12 @@
     }
 
     return inp;
+  }
+
+  // Hook: nach Stun Ende Wake-Guard setzen (vom Tick-Loop via markWake)
+  function markWake(p) {
+    if (!p) return;
+    p._kiWakeGuard = 18; // ~0.3s block-first
   }
 
   function zufallsGegner(meinId) {
@@ -89,5 +107,5 @@
     return pool[t];
   }
 
-  Plaza.KI = { denk: denk, zufallsGegner: zufallsGegner, idle: idle };
+  Plaza.KI = { denk: denk, zufallsGegner: zufallsGegner, idle: idle, markWake: markWake };
 })(typeof window !== 'undefined' ? window : globalThis);
