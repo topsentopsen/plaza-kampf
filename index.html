@@ -10,7 +10,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-title" content="Plaza-Kampf">
-<title>Plaza-Kampf v1.7</title>
+<title>Plaza-Kampf v1.8</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230a0608'/%3E%3Ccircle cx='4' cy='11' r='3' fill='%238a1008'/%3E%3Ccircle cx='12' cy='11' r='3' fill='%23ff3a08'/%3E%3Cpath d='M6 4h4v3H6z' fill='%23ff6020'/%3E%3C/svg%3E">
 <style>
   html, body { margin: 0; width: 100%; height: 100%; height: 100dvh; width: 100dvw;
@@ -144,7 +144,7 @@
 <button type="button" id="mute" data-act="mute" aria-label="Ton aus">🔊</button>
 <div id="ios-hint" role="status"><strong>iPhone:</strong> Safari kann oft kein echtes Vollbild. Quer drehen, Adressleiste wegwischen — oder Teilen → <em>Zum Home-Bildschirm</em> (dann wie App, ohne Browserleiste).<br><button type="button" data-act="ios-hint-ok">Verstanden</button></div>
 <button type="button" id="fs" data-act="fs" aria-label="Vollbild" title="Vollbild">⛶</button>
-<div id="version">Plaza-Kampf v1.7</div>
+<div id="version">Plaza-Kampf v1.8</div>
 <div id="rahmen"><canvas id="spiel" width="1280" height="768"></canvas></div>
 <div id="status"></div>
 
@@ -170,7 +170,7 @@
     <div class="row">
       <input id="raum-input" type="text" placeholder="Raum-Code" autocomplete="off" autocapitalize="off" spellcheck="false">
     </div>
-    <p class="hint">v1.7: VFX/Waffen an 1280×768. Hart neu laden (?v=1.7).</p>
+    <p class="hint">v1.8: Porträts/HUD/Win-Posen + Perf. Hart neu laden (?v=1.8).</p>
   </div>
 
   <div class="screen" data-screen="warte" hidden>
@@ -189,7 +189,7 @@
     </div>
     <p class="hint"><strong>Host:</strong> Code/Link teilen (ohne &amp;host=1).<br>
     <strong>Gast:</strong> Namen tippen → <em>Jetzt beitreten</em>.<br>
-    Beide Handys: dieselbe Version (?v=1.7). iPhone: ⛶ oder „Zum Home-Bildschirm“.</p>
+    Beide Handys: dieselbe Version (?v=1.8). iPhone: ⛶ oder „Zum Home-Bildschirm“.</p>
   </div>
 
   <div class="screen" data-screen="ende" hidden>
@@ -252,14 +252,14 @@
 
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="js/palette.js?v=1.7"></script>
-<script src="js/chars.js?v=1.7"></script>
-<script src="js/kampf.js?v=1.7"></script>
-<script src="js/netz.js?v=1.7"></script>
-<script src="js/sound.js?v=1.7"></script>
-<script src="js/render.js?v=1.7"></script>
-<script src="js/ki.js?v=1.7"></script>
-<script src="js/ui.js?v=1.7"></script>
-<script src="js/main.js?v=1.7"></script>
+<script src="js/palette.js?v=1.8"></script>
+<script src="js/chars.js?v=1.8"></script>
+<script src="js/kampf.js?v=1.8"></script>
+<script src="js/netz.js?v=1.8"></script>
+<script src="js/sound.js?v=1.8"></script>
+<script src="js/render.js?v=1.8"></script>
+<script src="js/ki.js?v=1.8"></script>
+<script src="js/ui.js?v=1.8"></script>
+<script src="js/main.js?v=1.8"></script>
 </body>
 </html>

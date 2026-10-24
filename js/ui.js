@@ -65,7 +65,7 @@
           return s;
         }
         var ml = c.moves.light, mh = c.moves.heavy, ms = c.moves.special;
-        b.innerHTML = '<canvas class="char-port" width="48" height="48" aria-hidden="true"></canvas>' +
+        b.innerHTML = '<canvas class="char-port" width="144" height="144" aria-hidden="true"></canvas>' +
           '<span class="swatch" style="background:' + c.farbe + '"></span>' +
           '<strong>' + c.name + '</strong>' +
           '<em class="spitz">' + (c.spitzname || '') + '</em>' +

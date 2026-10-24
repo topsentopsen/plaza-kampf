@@ -1,4 +1,4 @@
-/* Pixel-Canvas v1.4: 1280×768, detaillierte 4×-Sprites, Hölle. */
+/* Pixel-Canvas v1.8 (Porträts/HUD/Win-Posen/Perf, Basis v1.4): 1280×768, detaillierte 4×-Sprites, Hölle. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -60,7 +60,7 @@
     var dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
     // v1.4: logische 1280×768 — Puffer 1× (Retina-Upscale macht CSS)
     BUF = 1; void dpr;
-    var ctx = canvas.getContext('2d');
+    var ctx = canvas.getContext('2d', { alpha: false });   // v1.8: Arena deckt immer alles ab
     canvas.width = W * BUF;
     canvas.height = H * BUF;
     applyBuf(ctx);
@@ -692,9 +692,53 @@
 
   function ofs(par) { return Math.round(-camX * par) - 80; }
 
+  // v1.8 Perf: Zeilenläufe pro Layer [[y0, y1], …], einmalig aus den Alphawerten berechnet
+  var LAYER_ORDER = ['L0', 'L1', 'L2', 'L3', 'L4', 'L5'];
+  function layerRuns() {
+    var inh = [], deck = [], k, y, i, L, d, w4, a, e, al, any, voll;
+    for (k = 0; k < LAYER_ORDER.length; k++) {
+      L = layers && layers[LAYER_ORDER[k]];
+      inh[k] = null; deck[k] = null;
+      if (!L) continue;
+      try { d = L.getContext('2d').getImageData(0, 0, L.width, L.height).data; } catch (err) { d = null; }
+      if (!d) continue;
+      inh[k] = new Uint8Array(L.height); deck[k] = new Uint8Array(L.height); w4 = L.width * 4;
+      for (y = 0; y < L.height; y++) {
+        any = 0; voll = 1;
+        for (i = y * w4 + 3, e = i + w4; i < e; i += 4) {
+          al = d[i];
+          if (al) any = 1;
+          if (al !== 255) { voll = 0; if (any) break; }
+        }
+        inh[k][y] = any; deck[k][y] = voll;
+      }
+    }
+    for (k = 0; k < LAYER_ORDER.length; k++) {
+      L = layers && layers[LAYER_ORDER[k]];
+      if (!L) continue;
+      if (!inh[k]) { L._runs = null; continue; }
+      var runs = [], s0 = -1, letzte = -99, j, zu;
+      for (y = 0; y < L.height; y++) {
+        zu = false;
+        for (j = k + 1; j <= 4 && !zu; j++) if (deck[j] && deck[j][y]) zu = true;   // L1–L4 decken
+        if (!inh[k][y] || zu) continue;
+        if (s0 >= 0 && y - letzte <= 16) { letzte = y; continue; }   // Lücken ≤ 16 Zeilen mitnehmen
+        if (s0 >= 0) runs.push([s0, letzte + 1]);
+        s0 = y; letzte = y;
+      }
+      if (s0 >= 0) runs.push([s0, letzte + 1]);
+      L._runs = runs;
+    }
+  }
   function drawLayer(ctx, layer, par, tick) {
     if (!layer) return;
-    ctx.drawImage(layer, ofs(par), 0);
+    if (layer._runs === undefined) layerRuns();
+    var rs = layer._runs, x0 = ofs(par), i, a, hh;
+    if (!rs) { ctx.drawImage(layer, x0, 0); return; }
+    for (i = 0; i < rs.length; i++) {
+      a = rs[i][0]; hh = rs[i][1] - a;
+      ctx.drawImage(layer, 0, a, layer.width, hh, x0, a, layer.width, hh);
+    }
   }
 
   // Publikum hüpft 20 Frames bei schweren Treffern (rein clientseitig aus dem Snapshot)
@@ -846,7 +890,14 @@
     ctx.fillRect(Math.round(x - rw * 0.7), yBoden + 4, Math.round(rw * 1.4), 6);
   }
 
+  // v1.8: Memo. Wird pro Figur und Frame ~150× mit denselben Paletten-Werten gerufen
+  var HEX_MEMO = {};
   function hexShade(hex, amt) {
+    var k = hex + '|' + amt, v = HEX_MEMO[k];
+    if (v === undefined) v = HEX_MEMO[k] = hexShade0(hex, amt);
+    return v;
+  }
+  function hexShade0(hex, amt) {
     if (!hex || hex[0] !== '#' || hex.length < 7) return hex || '#888';
     var n = parseInt(hex.slice(1), 16);
     var r = Math.max(0, Math.min(255, ((n >> 16) & 255) + amt));
@@ -983,6 +1034,14 @@
     }
     if (stun) dipY = 2;
     if (win) { h = c.h; w = c.w + 8; }
+    // v1.8 Win-Pose-Timing (p._winT = Render-Frames seit Rundenende, Fallback tick):
+    // 0–9 Auftakt (geduckt, Arme halb), 10–17 Pop mit Überschwinger, ab 18 Halten, Pulse alle 48 Frames
+    var winT = win ? (p._winT != null ? p._winT | 0 : tick) : 0;
+    var wAuf = win && winT < 10, wPop = win && winT >= 10 && winT < 18;
+    var wPh = (win && winT >= 18) ? (winT - 18) % 48 : 99;
+    var wSin = win ? Math.sin(winT * 0.13) : 0;
+    var wk = wAuf ? 0.3 : (wPop ? 1.2 - 0.2 * (winT - 10) / 7 : 1);
+    if (win) dipY = wAuf ? 4 : (wPop ? (id === 'nina' ? -8 : -3) : Math.round(wSin));
     if (blink && p.invuln > 0 && (p.invuln % 2 === 0)) return;
     var lidZu = !stun && !mv && ((tick + p.id * 37) % 150) < 6;
 
@@ -1013,6 +1072,8 @@
     if (phase === 'wind') leanL -= Math.round((2 + wt * 3) * prog);
     else if (phase === 'hit') leanL += hitLean + (impact ? (kick ? -2 : 4) : 0);
     else if (phase === 'rec') leanL += Math.round((kick ? -2 : hitLean * 0.5) * (1 - prog));
+    // v1.8: Haltung im Sieg (Rocco/Lola/Toni zurückgelehnt, Nina nach vorn)
+    if (win) leanL = id === 'rocco' ? -4 : (id === 'lola' ? -3 : (id === 'toni' ? -2 : (id === 'nina' ? 2 : 0)));
     var by = y - h;
 
     // ---- Lokale Zeichen-Helfer (gespiegelt nach facing) ----
@@ -1038,8 +1099,22 @@
     function seg(x0, y0, x1, y1, t, col) {
       var dx = x1 - x0, dy = y1 - y0;
       var n = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / Math.max(2, t * 0.5)));
-      var r = t / 2;
-      for (var i = 0; i <= n; i++) M(Math.round(x0 + dx * i / n - r), Math.round(y0 + dy * i / n - r), t, t, col);
+      var r = t / 2, i, sx, sy;
+      var T = Math.round(t);
+      if (T < 2 || ctx.globalAlpha < 1) {
+        for (i = 0; i <= n; i++) M(Math.round(x0 + dx * i / n - r), Math.round(y0 + dy * i / n - r), t, t, col);
+        return;
+      }
+      // v1.8: Läufe mit gleicher Spalte/Zeile zu einem Rechteck verschmelzen (pixelgleich)
+      var steil = Math.abs(dy) >= Math.abs(dx), qa = 0, lo = 0, hi = 0, on = false, fa, fb;
+      for (i = 0; i <= n; i++) {
+        sx = Math.round(x0 + dx * i / n - r); sy = Math.round(y0 + dy * i / n - r);
+        fa = steil ? sx : sy; fb = steil ? sy : sx;
+        if (on && fa === qa && fb >= lo - T && fb <= hi + T) { if (fb < lo) lo = fb; if (fb > hi) hi = fb; continue; }
+        if (on) { if (steil) M(qa, lo, T, hi - lo + T, col); else M(lo, qa, hi - lo + T, T, col); }
+        on = true; qa = fa; lo = hi = fb;
+      }
+      if (steil) M(qa, lo, T, hi - lo + T, col); else M(lo, qa, hi - lo + T, T, col);
     }
     // Polylinie mit Kontur: erst alle ink, dann Farbe, dann Lichtkante
     function glied(pts, t, col, col2) {
@@ -1142,11 +1217,26 @@
       aF = [shF - 2, shY + 6 - fl2, shF + 6 - fl2, shY - 18 - fl2];
       aB = [shB - 8 - fl2, shY + 4, shB - 14 - fl2, shY - 16 - fl2];
     }
-    var winPulse = win && ((tick + p.id * 11) % 30) < 2;   // 1-Tick-Pulse: Arm schnellt hoch, Prop glänzt
+    var winPulse = win && wPh < 3;                       // 3 Frames alle 48: Arm zuckt 4 px, Prop glänzt
     if (win) {
-      var wp = winPulse ? 6 : 0;
-      aF = [shF + 4, shY - 18 - (wp >> 1), shF + 6, shY - 38 - wp];
-      aB = [shB - 4, shY - 18, shB - 6, shY - 38];
+      // v1.8: Pose pro Char [Ellbogen x, y, Hand x, y], aus der Grundhaltung mit wk eingeblendet
+      var wp = winPulse ? 4 : 0, winF, winB, wi0;
+      if (id === 'lola') {            // Flamenco: Arm im Bogen über dem Kopf, andere Hand in der Hüfte
+        winF = [shF + 8, shY - 30, shB + 4, shY - 52]; winB = [shB - 14, shY + 18, shB + 4, tb - 10];
+      } else if (id === 'toni') {     // Hammer senkrecht hoch, hinterer Arm zeigt den Bizeps
+        winF = [shF + 6, shY - 22, shF + 8, shY - 46]; winB = [shB - 20, shY + 4, shB - 14, shY - 22];
+      } else if (id === 'rocco') {    // Türsteher: Arme vor der Brust verschränkt
+        winF = [shF + 14, shY + 20, shB + 14, shY + 16]; winB = [shB + 4, shY + 24, shF + 2, shY + 12];
+      } else if (id === 'nina') {     // Faust zur Sonne, hinterer Arm im V nach hinten oben
+        winF = [shF + 12, shY - 20, shF + 24, shY - 46]; winB = [shB - 18, shY - 8, shB - 32, shY - 26];
+      } else {                         // Biel: Fang hoch, andere Hand in der Hüfte
+        winF = [shF + 12, shY - 16, shF + 18, shY - 42]; winB = [shB - 16, shY + 16, shB + 6, tb - 10];
+      }
+      if (id !== 'rocco') { winF[1] -= wp >> 1; winF[3] -= wp; }
+      for (wi0 = 0; wi0 < 4; wi0++) {
+        aF[wi0] = Math.round(aF[wi0] + (winF[wi0] - aF[wi0]) * wk);
+        aB[wi0] = Math.round(aB[wi0] + (winB[wi0] - aB[wi0]) * wk);
+      }
     }
     var gwx = 0, gwy = 0;
     if (mv && !kick) {
@@ -1289,7 +1379,14 @@
       }
       else if (blk) { ax = 6; ak = 6; bx = -16; bk = 2; }
       else if (stun) { ax = 16 + Math.round(6 * stK); al = 6; ak = 2; bx = -12 - Math.round(4 * stK); bk = 0; }
-      else if (win) { ax = 14; ak = 2; bx = -14; bk = 2; }
+      else if (win) {                           // v1.8: Stand pro Char
+        if (id === 'lola') { ax = 2; al = 4; ak = 6; bx = -18; bk = 2; }            // Fuß gekreuzt, auf der Spitze
+        else if (id === 'toni') { ax = 22; ak = 4; bx = -22; bk = 4; }               // breit, schwer
+        else if (id === 'rocco') { ax = 20; ak = 2; bx = -22; bk = 2; }              // breit, steif
+        else if (id === 'nina') { ax = 8; al = 14; ak = 12; bx = -12; bk = 2; }      // Knie hoch
+        else { ax = 12; ak = 2; bx = -16; bk = 2; }
+        if (wAuf) { ax = ax >> 1; bx = -((-bx) >> 1); al = 0; ak = 6; bk = 6; }
+      }
       else if (idleOn) {                         // Gewicht auf ein Bein -> dessen Knie beugt
         ak = 4 + Math.round(Math.max(0, wsK) * 3); bk = 4 + Math.round(Math.max(0, -wsK) * 3);
       }
@@ -1721,7 +1818,7 @@
       else if (stun) { hdx = -0.6; hdy = 0.8; }
       else if (crouch) { hdx = 1; hdy = 0.4; }
       else if (air) { hdx = -0.6; hdy = -0.8; }
-      hammer(aF[2], aF[3], hdx, hdy, hot || winPulse);
+      hammer(aF[2], aF[3], hdx, hdy, hot || (win && !wAuf));   // v1.8: glüht in der ganzen Siegerpose
       if (art === 'special' && phase !== 'wind') {
         var gx = aF[2] + 18;
         alpha(0.9);
@@ -1896,21 +1993,55 @@
       alpha(1);
     }
 
-    // Win-Pose: Funken-Krone + Char-Flair (+ 1-Tick-Pulse)
-    if (win) {
-      var wy = -(((tick / 6) | 0) % 2) * 4, kx2 = Math.round(kopfX);
-      M(kx2 - 16, -34 + wy, 32, 12, '#ffb040');
-      M(kx2 - 8, -46 + wy, 16, 12, '#ffe080');
-      M(kx2 - 22, -26 + wy, 8, 8, accent); M(kx2 + 14, -26 + wy, 8, 8, accent);
-      if (id === 'lola') { for (var wi = 0; wi < 3; wi++) rose(-30 + wi * 24, -24 + wy - (wi % 2) * 6, 1.2); }
-      else if (id === 'nina') { M(aF[2] - 3, aF[3] - 50, 6, 40, '#ffe080'); M(aF[2] - 16, aF[3] - 36, 32, 6, '#ffb040'); sonne(aF[2], aF[3] - 20, 8); }
-      else if (id === 'biel') { K(aB[2] - 14, aB[3] - 10, 28, 16, '#e8c090'); M(aB[2] - 10, aB[3] - 8, 20, 4, '#c03020'); M(aB[2] - 6, aB[3] - 2, 12, 2, '#a0a030'); }
-      else if (id === 'rocco') { K(aF[2] - 10, aF[3] - 12, 20, 6, accent); }
-      if (winPulse) {
-        M(kx2 - 4, -52 + wy, 8, 6, '#fff8ee');
-        if (id !== 'lola') stern(aF[2] + 2, aF[3] - 10, 9, '#fff8ee');
+    // v1.8 Win-Pose: Krone (Kontur) + Char-Flair. Auftakt ohne Flair, Pop mit fallender Krone, Pulse alle 48 Frames
+    if (win && !wAuf) {
+      var wy = Math.round(wSin * 2) - (wPop ? 18 - winT : 0), kx2 = Math.round(kopfX), wi;
+      // Krone sitzt knapp über Hut/Haar: Biel Mütze −14, Lola Peineta −20, Toni Glatze 0, Rocco Flat-Top −6, Nina Bügel −10
+      var ky0 = wy + (id === 'lola' ? -36 : (id === 'biel' ? -30 : (id === 'nina' ? -26 : (id === 'rocco' ? -22 : -16))));
+      K(kx2 - 18, ky0 - 10, 8, 12, '#ffe080'); K(kx2 - 4, ky0 - 15, 8, 17, '#ffe080'); K(kx2 + 10, ky0 - 10, 8, 12, '#ffe080');
+      K(kx2 - 20, ky0, 40, 12, '#ffb040');
+      M(kx2 - 18, ky0 + 2, 36, 2, '#fff0c0');
+      M(kx2 - 11, ky0 + 5, 4, 4, accent); M(kx2 - 2, ky0 + 5, 4, 4, '#ff3a08'); M(kx2 + 7, ky0 + 5, 4, 4, accent);
+      if (winPulse) M(kx2 - 2, ky0 - 22, 4, 6, '#fff8ee');
+      if (id === 'biel') {                     // Fisch am Schwanz gepackt, zappelt
+        var fx2 = aF[2], fy2 = aF[3] - 4, zp = (winPulse ? 4 : 0) + Math.round(wSin * 2);
+        K(fx2 - 8, fy2 - 12 - zp, 10, 9, '#4a7888'); K(fx2 - 8, fy2 + 3 + zp, 10, 9, '#4a7888');
+        K(fx2 + 2, fy2 - 9, 46, 18, '#6a98a8');
+        M(fx2 + 6, fy2 + 1, 38, 5, '#c8e0e8'); M(fx2 + 6, fy2 - 7, 30, 2, '#9ac0cc');
+        for (wi = 0; wi < 4; wi++) M(fx2 + 10 + wi * 7, fy2 - 3, 3, 3, '#4a7888');   // Schuppen
+        K(fx2 + 14, fy2 - 15, 16, 8, '#4a7888');
+        M(fx2 + 36, fy2 - 5, 5, 5, '#fff8ee'); M(fx2 + 38, fy2 - 4, 2, 2, ink); M(fx2 + 44, fy2 + 2, 4, 2, ink);
+        faust(aF[2], aF[3], LK.hand, false);
+        if (winPulse) { K(fx2 - 16, fy2 - 26, 6, 8, '#80d8ff'); K(fx2 + 50, fy2 - 22, 6, 8, '#80d8ff'); stern(fx2 + 24, fy2 - 24, 9, '#fff8ee'); }
+      } else if (id === 'lola') {              // Rosenblätter-Regen
+        for (wi = 0; wi < 12; wi++) {
+          var pyl = -70 + ((winT * 2 + wi * 37) % 220), pxl = ((wi * 53) % 170) - 85 + Math.round(Math.sin((winT + wi * 20) * 0.08) * 8);
+          K(pxl, pyl, 10, 8, wi % 3 ? '#d01838' : '#ff5a70'); M(pxl + 2, pyl + 2, 3, 2, '#ff8090');
+        }
+      } else if (id === 'toni') {              // Funkenkranz um den glühenden Hammerkopf
+        var hx2 = aF[2] + 7, hy2 = aF[3] - 44;
+        for (wi = 0; wi < 6; wi++) {
+          var ang = wi * 1.047 + winT * 0.05, rr2 = 22 + ((winT * 3 + wi * 11) % 30);
+          var sxp = Math.round(hx2 + Math.cos(ang) * rr2), syp = Math.round(hy2 + Math.sin(ang) * rr2 * 0.7);
+          M(sxp - 3, syp - 3, 7, 7, ink); M(sxp - 1, syp - 1, 3, 3, wi % 2 ? '#ffb040' : '#ffe080');
+        }
+        if (winPulse) glutStern(hx2, hy2, 22, '#ffe080');
+      } else if (id === 'rocco') {             // zweiter Unterarm über dem ersten, Glanz wandert über die Brille
+        glied([shB + 6, shY + 28, shF + 16, shY + 26], LK.t, hexShade(LK.armU, -10));
+        faust(shF + 18, shY + 26, LK.hand, false);
+        var gl = winT % 48;
+        if (gl < 12) M(kL + hw - 26 + gl * 2, ey - 2, 2, 7, '#fff8ee');
+        if (winPulse) stern(kL + hw - 6, ey, 10, '#fff8ee');
+      } else if (id === 'nina') {              // Sonne über der Faust, Strahlenkranz dreht sich
+        var sr = 10 + (winPulse ? 4 : 0) + Math.round(wSin), scx = aF[2], scy = aF[3] - 28;
+        sonne(scx, scy, sr);
+        for (wi = 0; wi < 8; wi++) {
+          var a8 = wi * 0.785 + winT * 0.06;
+          var rx8 = Math.round(scx + Math.cos(a8) * (sr + 12)), ry8 = Math.round(scy + Math.sin(a8) * (sr + 12));
+          M(rx8 - 3, ry8 - 3, 7, 7, ink); M(rx8 - 1, ry8 - 1, 3, 3, '#ffe080');
+        }
       }
-      ctx.fillStyle = 'rgba(255,176,64,0.35)';
+      ctx.fillStyle = winPulse ? 'rgba(255,200,96,0.5)' : 'rgba(255,176,64,0.35)';
       ctx.fillRect(x - 72, BODEN - 8, 144, 16);
       ctx.fillStyle = 'rgba(255,224,128,0.25)';
       ctx.fillRect(x - 40, BODEN - 4, 80, 8);
@@ -2058,19 +2189,17 @@
     };
   }
 
+  // v1.8: gebackene Kapsel (hud-v1.8.js nametagBild), ganzzahlig, Pfeil zur Figur
   function nametag(ctx, p) {
     if (!p || !p.name) return;
     var label = String(p.name);
     if (label.length > 12) label = label.slice(0, 12);
-    var top = (p.y | 0) - (p.crouch ? 144 : 200);
+    var c = Plaza.Chars.finde(p.charId);
+    var top = Math.round(p.y) - (p.crouch ? 144 : 200);
+    var b = nametagBild(label, (c && c.accent) || '#ff6020');
+    if (b) { ctx.drawImage(b, Math.round(p.x) - (b.width >> 1), top - 30); return; }
     ctx.font = 'bold 28px ' + SCHRIFT;
     ctx.textAlign = 'center';
-    var tw = 0;
-    try { tw = ctx.measureText(label).width; } catch (e) { tw = label.length * 5; }
-    ctx.fillStyle = 'rgba(0,0,0,0.72)';
-    ctx.fillRect(p.x - tw / 2 - 12, top - 32, tw + 24, 40);
-    ctx.fillStyle = '#1a0808';
-    ctx.fillRect(p.x - tw / 2 - 12, top + 6, tw + 24, 3);
     ctx.fillStyle = '#ffe080';
     ctx.fillText(label, p.x, top);
   }
@@ -2383,160 +2512,272 @@
     projAlt = list.map(function (p) { return { x: p.x, y: p.y, owner: p.owner, typ: p.typ || 'ball' }; });
   }
 
+  /* ==== Plaza-Kampf v1.8 — HUD-Drop-in (render.js) ==================================
+   * ANKER: ersetzt in js/render.js alles ab
+   *            "  function hud(ctx, snap, ich) {"
+   *        bis AUSSCHLIESSLICH
+   *            "  function zeichne(r, snap, ich) {"
+   * Inhalt: Text-Cache (textBild/textZeichne), gebackene HUD-Platten, hud(), nametagBild().
+   * Regeln: Alle Koordinaten ganzzahlig (knackig bei 1280×768, keine halben Pixel an
+   *        Balkenkanten). Statisches (Rahmen, Namen, Ticks, Medaillon, Vignette, Texte) wird
+   *        einmal gebacken und per drawImage gesetzt. Pro Frame bleiben ~10 fillRects
+   *        (Balkenfüllung) statt ~42 fillRects + 9 fillText + 3 arc-Fills.
+   *        Keine Date.now/Math.random im Kampf-HUD → Host und Client zeigen dasselbe.
+   *        Alle Texte/Strings wie v1.7 (Combo, SPECIAL!, Countdown, GEWONNEN/VERLOREN, Rematch).
+   * ================================================================================= */
+  var TXT = {}, TXT_N = 0, TXT_MESS = null;
+  var hudHit = [0, 0], hudHpAlt = [1, 1];          // Treffer-Blitz am Balken + Porträt-Wackeln
+  var hudCombo = [0, 0], hudComboPop = [0, 0];      // Combo-Zähler-Pop
+  var hudZeit = null, hudZeitPop = 0, hudCd = null, hudCdPop = 0;
+  var winFrames = 0;                                // Render-Frames seit Rundenende (Win-Pose, auch auf dem MP-Client flüssig)
+  var HUD_PLATTE = {}, HUD_MEDAILLON = null, HUD_VIGNETTE = null;
+  var HUD_BW = 472, HUD_BH = 32, HUD_BY = 50, HUD_BX = 108;   // Balken: x 108..580 / 700..1172
+
+  // Text als Bild: Füllung (Farbe oder [oben, unten] als Verlauf), runde Kontur, 3-px-Schlagschatten
+  function textBild(text, px, bold, fill, stroke) {
+    text = String(text == null ? '' : text);
+    var fk = (typeof fill === 'string') ? fill : fill.join('/');
+    var key = px + (bold ? 'b' : 'n') + fk + '|' + (stroke || '') + '|' + text;
+    var b = TXT[key];
+    if (b !== undefined) return b;
+    if (TXT_N > 300) { TXT = {}; TXT_N = 0; }
+    if (typeof document === 'undefined') return (TXT[key] = null);
+    var font = (bold ? 'bold ' : '') + px + 'px ' + SCHRIFT;
+    if (!TXT_MESS) TXT_MESS = document.createElement('canvas').getContext('2d');
+    TXT_MESS.font = font;
+    var tw = Math.ceil(TXT_MESS.measureText(text).width);
+    var lw = stroke ? Math.max(4, Math.round(px / 6)) : 0, pad = (lw >> 1) + 4;
+    var base = pad + Math.round(px * 0.95);
+    b = backe(tw + pad * 2, base + Math.round(px * 0.28) + pad + 3, function (x) {
+      x.font = font; x.textAlign = 'left'; x.textBaseline = 'alphabetic';
+      if (stroke) {
+        x.lineJoin = 'round'; x.strokeStyle = stroke;
+        x.lineWidth = lw; x.strokeText(text, pad, base + 3);   // Schatten
+        x.strokeText(text, pad, base);
+      } else {
+        x.fillStyle = 'rgba(0,0,0,0.8)'; x.fillText(text, pad, base + 2);
+      }
+      if (typeof fill === 'string') x.fillStyle = fill;
+      else {
+        var g = x.createLinearGradient(0, base - px * 0.75, 0, base);
+        g.addColorStop(0, fill[0]); g.addColorStop(1, fill[1]);
+        x.fillStyle = g;
+      }
+      x.fillText(text, pad, base);
+    });
+    if (b) { b._base = base; b._pad = pad; b._tw = tw; b._txt = text; b._font = font; b._fill = (typeof fill === 'string') ? fill : fill[1]; }
+    TXT[key] = b; TXT_N++;
+    return b;
+  }
+  // y = Grundlinie wie bei fillText; sc ≠ 1 → weich skaliert (nur kurze Pops)
+  function textZeichne(ctx, b, x, y, align, sc) {
+    if (!b) return;
+    sc = sc || 1;
+    var ox = b._pad + (align === 'center' ? b._tw / 2 : (align === 'right' ? b._tw : 0));
+    if (sc === 1) { ctx.drawImage(b, Math.round(x - ox), Math.round(y - b._base)); return; }
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(b, Math.round(x - ox * sc), Math.round(y - b._base * sc), Math.round(b.width * sc), Math.round(b.height * sc));
+    ctx.imageSmoothingEnabled = false;
+  }
+  function text(ctx, s, px, bold, fill, stroke, x, y, align, sc) {
+    var b = textBild(s, px, bold, fill, stroke);
+    if (b) { textZeichne(ctx, b, x, y, align, sc); return; }
+    ctx.font = (bold ? 'bold ' : '') + px + 'px ' + SCHRIFT;       // Fallback ohne document
+    ctx.textAlign = align || 'left';
+    ctx.fillStyle = (typeof fill === 'string') ? fill : fill[1];
+    ctx.fillText(String(s), x, y);
+  }
+
+  // Statische Balken-Platte (unter der Füllung) + Overlay (Ticks/Schatten, über der Füllung).
+  // Platten-Koordinaten: x = Balken-x − 8, y = Bildschirm-y (Balken liegt bei HUD_BY).
+  function hudPlatte(c, name, mirror) {
+    var key = c.id + '|' + name + '|' + (mirror ? 1 : 0);
+    if (HUD_PLATTE[key] !== undefined) return HUD_PLATTE[key];
+    var bw = HUD_BW, bh = HUD_BH, ox = 8, by = HUD_BY, PW = bw + ox * 2, PH = by + bh + 8;
+    var acc = c.accent || '#ff6020';
+    var unten = backe(PW, PH, function (x) {
+      // Kapsel: 2 schwarz, 2 Akzent dunkel, 2 schwarz, Rinne mit dunkler Oberkante
+      x.fillStyle = '#000'; x.fillRect(ox - 6, by - 6, bw + 12, bh + 12);
+      x.fillStyle = hexShade(acc, -50); x.fillRect(ox - 4, by - 4, bw + 8, bh + 8);
+      x.fillStyle = hexShade(acc, -10); x.fillRect(mirror ? ox + bw - 60 : ox - 4, by - 4, 64, 2);
+      x.fillStyle = '#000'; x.fillRect(ox - 2, by - 2, bw + 4, bh + 4);
+      x.fillStyle = '#1e0806'; x.fillRect(ox, by, bw, bh);
+      x.fillStyle = '#2c0c08'; x.fillRect(ox, by, bw, 4);
+    });
+    var oben = backe(PW, PH, function (x) {
+      x.fillStyle = 'rgba(0,0,0,0.5)';
+      for (var t = 1; t < 10; t++) x.fillRect(ox + Math.round(bw * t / 10) - 1, by, 2, bh);
+      x.fillStyle = 'rgba(0,0,0,0.28)'; x.fillRect(ox, by + bh - 4, bw, 4);
+    });
+    var p = { unten: unten, oben: oben, ox: ox,
+      name: textBild(name, 30, true, ['#fff0c0', '#e8b070'], '#000'),
+      spitz: textBild(c.spitzname || '', 20, false, '#c88a50', '#000') };
+    HUD_PLATTE[key] = p;
+    return p;
+  }
+
+  function hudMedaillon() {
+    if (HUD_MEDAILLON) return HUD_MEDAILLON;
+    HUD_MEDAILLON = backe(128, 128, function (x) {
+      x.imageSmoothingEnabled = true;
+      var ringe = [[60, '#000'], [55, '#ff3a08'], [51, '#ffb040'], [49, '#000'], [46, '#2a0c08'], [40, '#1a0606']];
+      for (var i = 0; i < ringe.length; i++) {
+        x.fillStyle = ringe[i][1]; x.beginPath(); x.arc(64, 64, ringe[i][0], 0, Math.PI * 2); x.fill();
+      }
+      x.fillStyle = 'rgba(255,200,120,0.18)'; x.beginPath(); x.arc(64, 56, 34, Math.PI * 1.1, Math.PI * 1.9); x.fill();
+    });
+    return HUD_MEDAILLON;
+  }
+  function hudVignette() {
+    if (HUD_VIGNETTE) return HUD_VIGNETTE;
+    // 1 px breit, per drawImage auf 1280 gestreckt: billiger als ein Vollbild-Verlauf pro Frame
+    HUD_VIGNETTE = backe(1, H, function (x) {
+      var grd = x.createLinearGradient(0, 0, 0, H);
+      grd.addColorStop(0, 'rgba(0,0,0,0.88)');
+      grd.addColorStop(0.45, 'rgba(0,0,0,0.55)');
+      grd.addColorStop(1, 'rgba(0,0,0,0.15)');
+      x.fillStyle = grd; x.fillRect(0, 0, 1, H);
+    });
+    return HUD_VIGNETTE;
+  }
+
+  // Nametag als Bild: Kapsel 2 px Kontur, Akzent-Unterkante, Pfeil zur Figur
+  function nametagBild(name, acc) {
+    var key = 'tag|' + name + '|' + acc;
+    if (TXT[key] !== undefined) return TXT[key];
+    var t = textBild(name, 24, true, '#ffe080', null);
+    if (!t) return (TXT[key] = null);
+    var w = t._tw + 28, h = 48;
+    var b = backe(w, h, function (x) {
+      x.fillStyle = '#000'; x.fillRect(0, 0, w, 38); x.fillRect((w >> 1) - 8, 36, 16, 6); x.fillRect((w >> 1) - 4, 40, 8, 6);
+      x.fillStyle = 'rgba(26,8,8,0.92)'; x.fillRect(2, 2, w - 4, 34);
+      x.fillStyle = acc; x.fillRect(2, 32, w - 4, 4); x.fillRect((w >> 1) - 6, 36, 12, 2); x.fillRect((w >> 1) - 2, 38, 4, 4);
+      x.fillStyle = hexShade(acc, 50); x.fillRect(2, 32, w - 4, 1);
+      x.drawImage(t, 14 - t._pad, 27 - t._base);
+    });
+    TXT[key] = b; TXT_N++;
+    return b;
+  }
+
   function hud(ctx, snap, ich) {
-    function balken(x, p, mirror) {
+    var tick = snap.tick || 0;
+    var same = snap.p[0] && snap.p[1] && snap.p[0].charId === snap.p[1].charId;
+    function balken(p, mirror) {
       var c = Plaza.Chars.finde(p.charId);
-      var bw = 472, bh = 40;
-      var idx = p.id;
-      var pct = Math.max(0, p.hp / p.maxHp);
-      // Delay-Balken
+      var bw = HUD_BW, bh = HUD_BH, idx = p.id & 1;
+      var bx = mirror ? W - HUD_BX - bw : HUD_BX, by = HUD_BY;
+      var pct = Math.max(0, Math.min(1, p.hp / p.maxHp));
+      // Delay-Balken (wie v1.7)
       if (delayHp[idx] < pct) delayHp[idx] = pct;
       else delayHp[idx] += (pct - delayHp[idx]) * 0.08;
       if (Math.abs(delayHp[idx] - pct) < 0.002) delayHp[idx] = pct;
+      if (pct < hudHpAlt[idx] - 0.001) hudHit[idx] = 12;
+      hudHpAlt[idx] = pct;
+      if (hudHit[idx] > 0) hudHit[idx]--;
 
-      // Rahmen Kapsel (schwarz, Feuer-Rand)
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(x - 8, 40, bw + 16, bh + 24);
-      ctx.fillStyle = '#3a1008';
-      ctx.fillRect(x, 48, bw, bh + 8);
-      // Delay (Bernstein)
-      ctx.fillStyle = '#8a4010';
-      var dw = bw * delayHp[idx];
-      if (mirror) ctx.fillRect(x + bw - dw, 52, dw, bh);
-      else ctx.fillRect(x, 52, dw, bh);
-      // HP — heller Akzent (Feuer), nicht dunkle Outfitfarbe
-      var low = pct <= 0.3;
-      ctx.fillStyle = low && ((Date.now() / 80) | 0) % 2 ? '#ff2a40' : (c.accent || '#ff3a08');
-      var fw = bw * pct;
-      if (mirror) ctx.fillRect(x + bw - fw, 52, fw, bh);
-      else ctx.fillRect(x, 52, fw, bh);
-      // Highlight-Zeile
-      ctx.fillStyle = 'rgba(255,200,120,0.35)';
-      if (mirror) ctx.fillRect(x + bw - fw, 52, fw, 8);
-      else ctx.fillRect(x, 52, fw, 8);
-      // Ticks
-      ctx.fillStyle = 'rgba(0,0,0,0.45)';
-      for (var t = 1; t < 10; t++) ctx.fillRect(x + (bw * t) / 10, 48, 4, bh + 8);
+      var pl = hudPlatte(c, String(p.name || c.name), mirror);
+      var px0 = bx - pl.ox;
+      if (pl.unten) ctx.drawImage(pl.unten, px0, 0);
+      else { ctx.fillStyle = '#000'; ctx.fillRect(bx - 6, by - 6, bw + 12, bh + 12); ctx.fillStyle = '#1e0806'; ctx.fillRect(bx, by, bw, bh); }
 
-      // Mini-Porträt (Kopf + Schulter + Akzent)
-      var px = mirror ? x + bw + 16 : x - 72;
-      ctx.fillStyle = '#000';
-      ctx.fillRect(px - 8, 28, 64, 64);
-      ctx.fillStyle = c.farbe2;
-      ctx.fillRect(px - 4, 56, 56, 32);
-      ctx.fillStyle = c.farbe;
-      ctx.fillRect(px, 48, 48, 24);
-      ctx.fillStyle = c.haut || '#ffd7b8';
-      ctx.fillRect(px + 8, 32, 32, 28);
-      ctx.fillStyle = '#0a0810';
-      ctx.fillRect(px + 4, 28, 40, 12);
-      ctx.fillStyle = c.accent || '#ff6020';
-      ctx.fillRect(px + 12, 44, 8, 8);
-      ctx.fillRect(px + 28, 44, 8, 8);
+      // Füllungen: ganzzahlig
+      var dw = Math.round(bw * delayHp[idx]), fw = Math.round(bw * pct);
+      var dx0 = mirror ? bx + bw - dw : bx, fx0 = mirror ? bx + bw - fw : bx;   // wie v1.7: P1 ab links, P2 ab rechts
+      if (dw > fw) {
+        ctx.fillStyle = hudHit[idx] > 6 ? '#fff0c0' : '#c05810';
+        ctx.fillRect(dx0, by, dw, bh);
+      }
+      if (fw > 0) {
+        var acc = c.accent || '#ff3a08', low = pct <= 0.3;
+        var base = low ? (((tick >> 2) & 1) ? '#ff2a40' : '#c01830') : hexShade(acc, 40);
+        ctx.fillStyle = base; ctx.fillRect(fx0, by, fw, bh);
+        ctx.fillStyle = low ? '#ff8a90' : hexShade(acc, 90); ctx.fillRect(fx0, by + 4, fw, 4);
+        ctx.fillStyle = low ? '#ffd0d0' : hexShade(acc, 130); ctx.fillRect(fx0, by + 4, fw, 1);
+        ctx.fillStyle = low ? '#700818' : hexShade(acc, -20); ctx.fillRect(fx0, by + bh - 10, fw, 6);
+        // helle Kante an der Schnittstelle
+        ctx.fillStyle = '#fff0c0'; ctx.fillRect(mirror ? fx0 : fx0 + fw - 2, by, 2, bh);
+      }
+      if (pl.oben) ctx.drawImage(pl.oben, px0, 0);
 
-      // Name + Spitzname
-      ctx.fillStyle = '#e8c090';
-      ctx.font = 'bold 32px ' + SCHRIFT;
-      ctx.textAlign = mirror ? 'right' : 'left';
-      ctx.fillText(p.name, mirror ? x + bw : x, 36);
+      // Porträt: außen neben dem Balken, schaut zur Mitte; Treffer → 2 px Wackeln + roter Blitz
+      var pb = portraitBild(c.id, mirror ? -1 : 1, same && idx === 1);
+      var ppx = mirror ? W - 24 - PORT_S : 24, ppy = 22;
+      if (hudHit[idx] > 0) ppx += ((hudHit[idx] & 2) ? 2 : -2);
+      if (pb) ctx.drawImage(pb, ppx, ppy);
+      if (hudHit[idx] > 6 || p.hp <= 0) {
+        ctx.fillStyle = p.hp <= 0 ? 'rgba(10,4,6,0.55)' : 'rgba(255,60,20,0.35)';
+        ctx.fillRect(ppx + 4, ppy + 4, PORT_S - 8, PORT_S - 8);
+      }
+      // Name über, Spitzname unter dem Balken (zur Außenkante bündig)
+      var nx = mirror ? bx + bw : bx;
+      if (pl.name) textZeichne(ctx, pl.name, nx, by - 12, mirror ? 'right' : 'left');
+      else text(ctx, p.name, 30, true, '#e8c090', '#000', nx, by - 12, mirror ? 'right' : 'left');
+      if (pl.spitz) textZeichne(ctx, pl.spitz, nx, by + bh + 26, mirror ? 'right' : 'left');
     }
-    balken(112, snap.p[0], false);
-    balken(W - 584, snap.p[1], true);
+    balken(snap.p[0], false);
+    balken(snap.p[1], true);
 
-    // Zeit-Medaillon
-    ctx.fillStyle = '#000000';
-    ctx.beginPath();
-    ctx.arc(W / 2, 72, 56, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#ff3a08';
-    ctx.beginPath();
-    ctx.arc(W / 2, 72, 48, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#1a0808';
-    ctx.beginPath();
-    ctx.arc(W / 2, 72, 40, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = snap.zeit <= 10 ? '#ff2a40' : '#e8c090';
-    ctx.font = 'bold 40px ' + SCHRIFT;
-    ctx.textAlign = 'center';
-    ctx.fillText(String(snap.zeit), W / 2, 86);
+    // Zeit-Medaillon (gebacken) + Ziffern; ≤ 10 s rot mit Pop beim Wechsel
+    var med = hudMedaillon();
+    if (med) ctx.drawImage(med, (W >> 1) - 64, 72 - 64);
+    if (hudZeit !== snap.zeit) { hudZeitPop = snap.zeit <= 10 ? 10 : 0; hudZeit = snap.zeit; }
+    if (hudZeitPop > 0) hudZeitPop--;
+    var zr = snap.zeit <= 10;
+    text(ctx, String(snap.zeit), 44, true, zr ? ['#ff8080', '#ff2a40'] : ['#fff0c0', '#e8b070'], '#000',
+      W >> 1, 88, 'center', 1 + hudZeitPop * 0.03);
 
     if (snap.phase === 'countdown') {
       ctx.fillStyle = 'rgba(58,46,72,0.45)';
       ctx.fillRect(0, 0, W, H);
-      ctx.fillStyle = '#e8c090';
-      ctx.font = 'bold 160px ' + SCHRIFT;
-      ctx.fillText(snap.countdown > 0 ? String(snap.countdown) : 'LOS!', W / 2, H / 2 + 32);
-      ctx.fillStyle = '#ffe080';
-      ctx.font = '28px ' + SCHRIFT;
-      ctx.fillText('A leicht · B schwer · C special · ▼ duck', W / 2, H / 2 + 80);
-    }
-    // Combo-Anzeige
-    var ci, bestC = 0, bestId = -1;
-    for (ci = 0; ci < snap.p.length; ci++) {
-      if ((snap.p[ci].combo | 0) > bestC) { bestC = snap.p[ci].combo | 0; bestId = ci; }
-    }
-    if (bestC >= 2 && snap.phase === 'kampf') {
-      ctx.fillStyle = bestC >= 5 ? '#ffd040' : '#ff6020';
-      ctx.font = 'bold 48px ' + SCHRIFT;
-      ctx.textAlign = 'center';
-      ctx.fillText((bestC >= 5 ? 'SUPER ' : '') + bestC + ' HIT!', W / 2, 160);
-      ctx.fillStyle = '#ffe080';
-      ctx.font = '32px ' + SCHRIFT;
-      var cd = snap.p[bestId].comboDmg | 0;
-      ctx.fillText(snap.p[bestId].name + (cd ? (' · ' + cd + ' DMG') : ''), W / 2, 200);
+      var cdT = snap.countdown > 0 ? String(snap.countdown) : 'LOS!';
+      if (hudCd !== cdT) { hudCd = cdT; hudCdPop = 12; }
+      if (hudCdPop > 0) hudCdPop--;
+      text(ctx, cdT, 160, true, ['#fff0c0', '#ff9a38'], '#000', W >> 1, (H >> 1) + 32, 'center', 1 + hudCdPop * 0.025);
+      text(ctx, 'A leicht · B schwer · C special · ▼ duck', 28, false, '#ffe080', '#000', W >> 1, (H >> 1) + 88, 'center');
+    } else hudCd = null;
+
+    // Combo: pro Spieler unter dem eigenen Balken, Zahl poppt bei jedem neuen Treffer
+    for (var ci = 0; ci < snap.p.length; ci++) {
+      var cp = snap.p[ci], cn = cp.combo | 0, cix = cp.id & 1;
+      if (cn !== hudCombo[cix]) { if (cn > hudCombo[cix]) hudComboPop[cix] = 8; hudCombo[cix] = cn; }
+      if (hudComboPop[cix] > 0) hudComboPop[cix]--;
+      if (cn < 2 || snap.phase !== 'kampf') continue;
+      var rechts = cix === 1, cx = rechts ? W - HUD_BX : HUD_BX, sup = cn >= 5;
+      var sc = 1 + hudComboPop[cix] * 0.04;
+      text(ctx, (sup ? 'SUPER ' : '') + cn + ' HIT!', 52, true, sup ? ['#fff0a0', '#ffb020'] : ['#ffd080', '#ff6020'], '#000',
+        cx, 182, rechts ? 'right' : 'left', sc);
+      var cd = cp.comboDmg | 0;
+      text(ctx, cp.name + (cd ? (' · ' + cd + ' DMG') : ''), 26, true, '#ffe080', '#000', cx, 216, rechts ? 'right' : 'left');
     }
     // Special-Callout
     for (var si = 0; si < snap.p.length; si++) {
-      if (snap.p[si].hitKind === 'special' && snap.phase === 'kampf' && (snap.tick % 20) < 12) {
-        ctx.fillStyle = '#80d8ff';
-        ctx.font = 'bold 40px ' + SCHRIFT;
-        ctx.textAlign = 'center';
-        ctx.fillText('SPECIAL!', W / 2, 240);
+      if (snap.p[si].hitKind === 'special' && snap.phase === 'kampf' && (tick % 20) < 12) {
+        text(ctx, 'SPECIAL!', 48, true, ['#e0f8ff', '#40b8ff'], '#000', W >> 1, 186, 'center');
         break;
       }
     }
 
     if (snap.phase === 'ende') {
-      // Obere Vignette — Kämpfer / Win-Pose unten sichtbar
-      var grd = ctx.createLinearGradient(0, 0, 0, H);
-      grd.addColorStop(0, 'rgba(0,0,0,0.88)');
-      grd.addColorStop(0.45, 'rgba(0,0,0,0.55)');
-      grd.addColorStop(1, 'rgba(0,0,0,0.15)');
-      ctx.fillStyle = grd;
-      ctx.fillRect(0, 0, W, H);
-      ctx.textAlign = 'center';
+      var vg = hudVignette();
+      if (vg) ctx.drawImage(vg, 0, 0, W, H);
       var won = (ich === 0 || ich === 1) && snap.sieger === ich;
       var lost = (ich === 0 || ich === 1) && snap.sieger != null && snap.sieger !== ich;
-      if (won) {
-        ctx.fillStyle = '#40ff80';
-        ctx.font = 'bold 72px ' + SCHRIFT;
-        ctx.fillText('GEWONNEN!', W / 2, 100);
-      } else if (lost) {
-        ctx.fillStyle = '#ff4040';
-        ctx.font = 'bold 72px ' + SCHRIFT;
-        ctx.fillText('VERLOREN!', W / 2, 100);
+      if (won) text(ctx, 'GEWONNEN!', 72, true, ['#c0ffd0', '#40ff80'], '#000', W >> 1, 92, 'center');
+      else if (lost) text(ctx, 'VERLOREN!', 72, true, ['#ffb0a0', '#ff4040'], '#000', W >> 1, 92, 'center');
+      var sp = snap.sieger != null ? snap.p[snap.sieger] : null;
+      var wc = sp ? Plaza.Chars.finde(sp.charId) : null;
+      // Sieger-Porträt 2× (crisp), schaut zur Mitte seiner Seite
+      var wb = wc ? portraitBild(wc.id, 1, same && snap.sieger === 1) : null;
+      if (wb) {
+        ctx.drawImage(wb, (W >> 1) - PORT_S, 112, PORT_S * 2, PORT_S * 2);
       }
-      ctx.fillStyle = '#ff6020';
-      ctx.font = 'bold 48px ' + SCHRIFT;
-      ctx.fillText(snap.nachricht || 'Ende', W / 2, 180);
-      if (snap.sieger != null && snap.p[snap.sieger]) {
-        var wc = Plaza.Chars.finde(snap.p[snap.sieger].charId);
-        if (wc && wc.winLine) {
-          ctx.fillStyle = '#ffb040';
-          ctx.font = '36px ' + SCHRIFT;
-          ctx.fillText('„' + wc.winLine + '“', W / 2, 240);
-        }
-      }
-      ctx.fillStyle = '#e8c090';
-      ctx.font = '36px ' + SCHRIFT;
-      ctx.fillText('Rematch → Knopf unten', W / 2, 300);
+      var ty = wb ? 300 : 180;
+      text(ctx, snap.nachricht || 'Ende', 48, true, ['#ffd080', '#ff6020'], '#000', W >> 1, ty, 'center');
+      if (wc && wc.winLine) text(ctx, '„' + wc.winLine + '“', 34, false, '#ffb040', '#000', W >> 1, ty + 50, 'center');
+      text(ctx, 'Rematch → Knopf unten', 32, false, '#e8c090', '#000', W >> 1, ty + 98, 'center');
     }
     if (ich === 0 || ich === 1) {
-      ctx.fillStyle = 'rgba(232,192,144,0.85)';
-      ctx.font = '32px ' + SCHRIFT;
-      ctx.textAlign = 'left';
-      ctx.fillText('Du: P' + (ich + 1), 24, H - 24);
+      text(ctx, 'Du: P' + (ich + 1), 28, true, 'rgba(232,192,144,0.9)', '#000', 24, H - 24, 'left');
     }
   }
 
@@ -2553,6 +2794,7 @@
     arena(ctx, snap.tick || 0, snap);
 
     var i;
+    winFrames = snap.phase === 'ende' ? winFrames + 1 : 0;   // v1.8: Win-Pose läuft in Render-Frames
     zeichneProjektile(ctx, snap);
 
     // Spiegelmatch: gleiche charId → P2 invertieren
@@ -2560,6 +2802,7 @@
     for (i = 0; i < snap.p.length; i++) {
       snap.p[i]._winPose = (snap.phase === 'ende' && snap.sieger === snap.p[i].id);
       snap.p[i]._tick = snap.tick || 0;
+      snap.p[i]._winT = winFrames;
       fig(ctx, snap.p[i], true, same && i === 1);
     }
     for (i = 0; i < snap.p.length; i++) nametag(ctx, snap.p[i]);
@@ -2569,7 +2812,7 @@
     ctx.restore();
   }
 
-  function menueHint(r, text) {
+  function menueHint(r, text0) {
     var ctx = r.ctx;
     applyBuf(ctx);
     if (!layers) layers = backeLayers();
@@ -2579,67 +2822,118 @@
     fg(ctx, 0);
     ctx.fillStyle = 'rgba(0,0,0,0.72)';
     ctx.fillRect(0, 0, W, 140);
-    ctx.fillStyle = '#e8c090';
-    ctx.font = 'bold 56px ' + SCHRIFT;
-    ctx.textAlign = 'center';
-    ctx.fillText('Plaza-Kampf', W / 2, 70);
-    ctx.fillStyle = '#ff6020';
-    ctx.font = '32px ' + SCHRIFT;
-    ctx.fillText('la Pelea del Infierno', W / 2, 120);
-    ctx.fillStyle = 'rgba(0,0,0,0.78)';
-    ctx.fillRect(160, H / 2 - 56, W - 320, 96);
-    ctx.fillStyle = '#ff6020';
-    ctx.font = '40px ' + SCHRIFT;
-    ctx.fillText(text || '', W / 2, H / 2 + 12);
+    // v1.8: Titel mit Kontur + Verlauf (gebacken), Hinweis-Kapsel mit Akzentkanten
+    ctx.fillStyle = '#ff3a08'; ctx.fillRect(0, 140, W, 2);
+    text(ctx, 'Plaza-Kampf', 60, true, ['#fff0c0', '#e8a060'], '#000', W >> 1, 76, 'center');
+    text(ctx, 'la Pelea del Infierno', 32, false, '#ff6020', '#000', W >> 1, 122, 'center');
+    ctx.fillStyle = '#000'; ctx.fillRect(156, (H >> 1) - 60, W - 312, 104);
+    ctx.fillStyle = 'rgba(20,6,6,0.9)'; ctx.fillRect(160, (H >> 1) - 56, W - 320, 96);
+    ctx.fillStyle = '#ff6020'; ctx.fillRect(160, (H >> 1) - 56, W - 320, 2); ctx.fillRect(160, (H >> 1) + 38, W - 320, 2);
+    text(ctx, text0 || '', 40, false, '#ff7a30', '#000', W >> 1, (H >> 1) + 12, 'center');
   }
 
-  function portrait(canvas, charId) {
+  /* ==== Plaza-Kampf v1.8 — Porträt-Drop-in (render.js) ==============================
+   * ANKER: ersetzt in js/render.js alles ab
+   *            "  function portrait(canvas, charId) {"
+   *        bis AUSSCHLIESSLICH
+   *            "  function banner(r, text) {"
+   * Idee: Das Porträt wird aus fig() selbst gebacken (Idle-Pose, Tick 40: Augen offen,
+   *        Blick geradeaus). Damit ist die Silhouette per Definition die der Kampf-Köpfe,
+   *        auch Hüte, Dutt, Brille und Kopfhörer. Darum kommen 2 px Außenkontur (#000),
+   *        ein Glut-Hintergrund in der Char-Akzentfarbe und ein 4-px-Rahmen (2 schwarz + 2 Akzent).
+   * Größe: PORT_S = 72 (64 Ausschnitt + 2×4 Rahmen). HUD zeichnet 1:1, Char-Select bei
+   *        144×144 crisp 2× (ui-patch-v1.8.js), bei jeder anderen Größe weich skaliert.
+   * Cache: pro charId/facing/invert ein Canvas, gebacken beim ersten Aufruf (~1 ms).
+   *        fig-interner Zustand (FIG_PY/PT/VY, flash) wird gesichert und zurückgesetzt.
+   * ================================================================================= */
+  var PORT_S = 72, PORT_C = 64, PORT_CACHE = {};
+
+  function portraitBild(charId, facing, invert) {
+    var f = facing === -1 ? -1 : 1;
+    var key = charId + '|' + f + '|' + (invert ? 1 : 0);
+    if (PORT_CACHE[key] !== undefined) return PORT_CACHE[key];
+    var c = Plaza.Chars && Plaza.Chars.finde(charId);
+    if (!c || typeof document === 'undefined' || !Plaza.Kampf) return (PORT_CACHE[key] = null);
+    var acc = c.accent || '#ff6020';
+    // 1) Figur in eine Arbeitsfläche, Füße bei y = 200, Mitte x = 120
+    var FW = 240, by = 200 - c.h;
+    var roh = backe(FW, FW, function (x) {
+      var s0 = FIG_PY[0], s1 = FIG_PT[0], s2 = FIG_VY[0], s3 = flash[0];
+      flash[0] = 0;
+      fig(x, { id: 0, charId: c.id, x: 120, y: 200, facing: f, grounded: true, stun: 0, invuln: 0,
+        hp: 1, maxHp: 1, vx: 0, crouch: false, blk: false, atk: null, _tick: 40, _winPose: false }, false, !!invert);
+      FIG_PY[0] = s0; FIG_PT[0] = s1; FIG_VY[0] = s2; flash[0] = s3;
+    });
+    if (!roh) return (PORT_CACHE[key] = null);
+    // 2) Ausschnitt 64×64: Hut/Peineta (bis −20) oben, Schultern unten; Kopf 2 px nach vorn versetzt
+    var sx = 120 - PORT_C / 2 + f * 2, sy = by - 22;
+    var aus = backe(PORT_C, PORT_C, function (x) { x.drawImage(roh, sx, sy, PORT_C, PORT_C, 0, 0, PORT_C, PORT_C); });
+    // Silhouette schwarz einfärben (für die 2-px-Außenkontur)
+    var sil = backe(PORT_C, PORT_C, function (x) {
+      x.drawImage(aus, 0, 0);
+      x.globalCompositeOperation = 'source-in';
+      x.fillStyle = '#000'; x.fillRect(0, 0, PORT_C, PORT_C);
+    });
+    var bild = backe(PORT_S, PORT_S, function (x) {
+      var i, o = 4;
+      // Hintergrund: dunkel, Glut-Hof hinter dem Kopf in Stufen (keine Verläufe, Pixel-Look)
+      x.fillStyle = '#0a0608'; x.fillRect(0, 0, PORT_S, PORT_S);
+      var hof = [[30, hexShade(acc, -70)], [22, hexShade(acc, -50)], [14, hexShade(acc, -30)]];
+      for (i = 0; i < hof.length; i++) {
+        var r = hof[i][0];
+        x.fillStyle = hof[i][1];
+        x.fillRect(36 - r, 30 - r + 4, r * 2, r * 2 - 8);
+        x.fillRect(36 - r + 4, 30 - r, r * 2 - 8, r * 2);
+      }
+      x.fillStyle = hexShade(c.farbe2 || '#200808', -6); x.fillRect(o, PORT_S - 16, PORT_C, 12); // Boden
+      for (i = 0; i < 6; i++) { x.fillStyle = 'rgba(255,176,64,' + (0.18 + (i % 3) * 0.1) + ')'; x.fillRect(o + 4 + i * 11, 10 + (i * 23) % 40, 2, 2); }
+      // Außenkontur: Silhouette 2 px in alle Richtungen, dann Figur
+      for (var dy = -2; dy <= 2; dy++) for (var dx = -2; dx <= 2; dx++) if (dx || dy) x.drawImage(sil, o + dx, o + dy);
+      x.drawImage(aus, o, o);
+      // Rahmen: 2 schwarz außen, 2 Akzent innen, Lichtkante oben-links
+      x.fillStyle = acc;
+      x.fillRect(2, 2, PORT_S - 4, 2); x.fillRect(2, PORT_S - 4, PORT_S - 4, 2);
+      x.fillRect(2, 2, 2, PORT_S - 4); x.fillRect(PORT_S - 4, 2, 2, PORT_S - 4);
+      x.fillStyle = hexShade(acc, 60); x.fillRect(2, 2, 18, 2); x.fillRect(2, 2, 2, 18);
+      x.fillStyle = '#000';
+      x.fillRect(0, 0, PORT_S, 2); x.fillRect(0, PORT_S - 2, PORT_S, 2);
+      x.fillRect(0, 0, 2, PORT_S); x.fillRect(PORT_S - 2, 0, 2, PORT_S);
+    });
+    return (PORT_CACHE[key] = bild);
+  }
+
+  // Öffentlich (ui.js Char-Select): zeichnet das Porträt formatfüllend in canvas.
+  // opt.facing (-1 = schaut nach links), opt.invert (Spiegelmatch-Farben)
+  function portrait(canvas, charId, opt) {
     if (!canvas) return;
-    var c = Plaza.Chars.finde(charId);
-    if (!c) return;
+    opt = opt || {};
+    var b = portraitBild(charId, opt.facing, opt.invert);
     var ctx = canvas.getContext('2d');
-    var s = canvas.width;
-    ctx.imageSmoothingEnabled = false;
-    ctx.fillStyle = '#0a0608';
-    ctx.fillRect(0, 0, s, s);
-    // Bust scale ~3x into 48
-    var sc = s / 16;
-    function px(x, y, w, h, col) {
-      ctx.fillStyle = col;
-      ctx.fillRect(Math.round(x * sc), Math.round(y * sc), Math.max(1, Math.round(w * sc)), Math.max(1, Math.round(h * sc)));
-    }
-    px(2, 10, 12, 6, c.farbe2);
-    px(3, 8, 10, 5, c.farbe);
-    px(4, 3, 8, 7, c.haut || '#ffd7b8');
-    px(3, 2, 10, 3, '#0a0810');
-    px(5, 5, 2, 2, c.accent || '#ff6020');
-    px(9, 5, 2, 2, c.accent || '#ff6020');
-    px(6, 7, 4, 1, '#3a2018');
-    // Char accent
-    if (c.id === 'toni') px(12, 6, 3, 5, '#4a4a4a');
-    if (c.id === 'lola') { px(1, 4, 2, 2, '#ff2a4a'); px(13, 5, 2, 2, '#ff2a4a'); }
-    if (c.id === 'nina') px(7, 1, 2, 2, '#ffe080');
-    if (c.id === 'biel') px(0, 9, 3, 2, '#5ec8b8');
-    if (c.id === 'rocco') px(12, 8, 3, 3, c.haut || '#ffd7b8');
-    // Border
-    ctx.strokeStyle = c.accent || '#ff6020';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(1, 1, s - 2, s - 2);
+    var s = canvas.width, sh = canvas.height || s;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, s, sh);
+    if (!b) return;
+    var crisp = (s % PORT_S) === 0;      // 72, 144, 216 → ganzzahlig, sonst weich (z. B. alte 48er)
+    if ('imageSmoothingEnabled' in ctx) ctx.imageSmoothingEnabled = !crisp;
+    if (!crisp && 'imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(b, 0, 0, s, sh);
+    if ('imageSmoothingEnabled' in ctx) ctx.imageSmoothingEnabled = false;
   }
 
-  function banner(r, text) {
+  function banner(r, s) {
     var ctx = r.ctx;
     applyBuf(ctx);
-    ctx.fillStyle = 'rgba(0,0,0,0.72)';
-    ctx.fillRect(80, H / 2 - 64, W - 160, 128);
-    ctx.fillStyle = '#ff4040';
-    ctx.font = 'bold 40px ' + SCHRIFT;
-    ctx.textAlign = 'center';
-    ctx.fillText(text || '…', W / 2, H / 2 + 14);
+    var y0 = (H >> 1) - 64;
+    ctx.fillStyle = '#000'; ctx.fillRect(76, y0 - 4, W - 152, 136);
+    ctx.fillStyle = 'rgba(26,6,6,0.92)'; ctx.fillRect(80, y0, W - 160, 128);
+    ctx.fillStyle = '#ff4040'; ctx.fillRect(80, y0, W - 160, 4); ctx.fillRect(80, y0 + 124, W - 160, 4);
+    text(ctx, s || '…', 40, true, ['#ffb0a0', '#ff4040'], '#000', W >> 1, (H >> 1) + 14, 'center');
   }
 
   function resetFx() {
     fx = []; delayHp = [1, 1]; flash = [0, 0]; prevSnap = null; shake = 0; projAlt = [];
+    hudHit = [0, 0]; hudHpAlt = [1, 1]; hudCombo = [0, 0]; hudComboPop = [0, 0];
+    hudZeit = null; hudZeitPop = 0; hudCd = null; hudCdPop = 0; winFrames = 0;
   }
 
   Plaza.Render = {
