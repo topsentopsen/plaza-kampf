@@ -482,6 +482,22 @@
   // Moves, die als Tritt (Bein statt Arm) gezeichnet werden
   var FIG_KICK = { lola: { heavy: 1, air: 1 }, nina: { heavy: 1, air: 1 } };
   var FIG_TRAIL = { biel: '#5ec8b8', lola: '#ff5a70', toni: '#ff4a18', rocco: '#a070e0', nina: '#ffe080' };
+  // v1.5: Snapshot hat kein vy -> pro Spieler aus y-Differenz schätzen (nur Zahlen, keine Allokation)
+  var FIG_PY = [0, 0], FIG_PT = [-1, -1], FIG_VY = [0, 0];
+  // Walk 6 Frames, je Fuß [x rel., lift, knieVor]; Stand 0-3, Schwung 4-5. 12 px pro Frame = kein Sliding
+  var FIG_WALK = [[18, 0, 3], [6, 0, 4], [-6, 0, 4], [-18, 3, 2], [-4, 12, 12], [10, 7, 8]];
+  var FIG_WDIP = [3, -1, -1, 3, -1, -1];          // Kontakt-Dip (Doppelstand) / Passing hoch
+  var FIG_WARM = [-10, -4, 4, 10, 4, -4];         // Armschwung gegenläufig zum vorderen Bein
+  function figVy(p, tick) {
+    var i = p.id & 1;
+    if (p.grounded) { FIG_VY[i] = 0; }
+    else if (tick !== FIG_PT[i]) {
+      var dt = tick - FIG_PT[i];
+      FIG_VY[i] = (FIG_PT[i] >= 0 && dt > 0 && dt < 6) ? (p.y - FIG_PY[i]) / dt : 0;
+    }
+    if (tick !== FIG_PT[i]) { FIG_PY[i] = p.y; FIG_PT[i] = tick; }
+    return FIG_VY[i];
+  }
 
   function fig(ctx, p, blink, invert) {
     var c = Plaza.Chars.finde(p.charId);
@@ -515,20 +531,43 @@
       }
     }
     var kick = !!(mv && FIG_KICK[id] && FIG_KICK[id][art]);
+    var impact = !!(mv && phase === 'hit' && atkF === mv.startup);   // 1 Tick Stretch
+    // Gewicht pro Move: Light schnell, Heavy schwer, Special theatralisch
+    var wt = !mv ? 0 : (art === 'special' ? 3 : (art === 'heavy' ? 2 : 1));
     var moving = Math.abs(p.vx || 0) > 0.6 && !air && !crouch && !mv && !stun;
-    var walk = moving ? (Math.floor(Math.abs(p.x) / 14) % 4) : 0;
+    // Walk: lokale Vorwärts-Position -> Rückwärtslauf spielt den Zyklus korrekt rückwärts
+    var walk = moving ? ((Math.floor(x * f / 12) % 6) + 6) % 6 : 0;
+    var wDir = moving ? ((p.vx || 0) * f > 0 ? 1 : -1) : 0;
+    var vy = figVy(p, tick);
 
-    // Idle-Atmung + Charakter-Ticks (v1.3-Werte ×4)
-    var idle = 0, idleX = 0, it = (tick / 8) | 0;
-    if (!mv && !stun && !air && !crouch && !blk && !moving) {
-      idle = (it + p.id * 3) % 2;
-      y -= idle * 2;
-      if (id === 'toni' && (it % 28) < 2) idleX = 4;
-      if (id === 'nina' && (it % 4) < 2) y -= 4;
-      if (id === 'lola') idleX = ((it % 6) < 3) ? 4 : 0;
-      if (id === 'rocco' && (it % 20) < 3) h -= 4;
-      if (id === 'biel' && (it % 22) < 2) idleX = -4;
+    // Idle: Atmen (Brust/Schultern), Gewichtswechsel, Look-around — Füße bleiben am Boden
+    var idleOn = !mv && !stun && !air && !crouch && !blk && !moving && !win;
+    var br = 0, idleX = 0, dipY = 0, look = 0, wsK = 0;
+    var tp = tick + p.id * 23;
+    if (idleOn) {
+      var bs = Math.sin(tp * 0.075);                       // ~84 Ticks pro Atemzug
+      br = Math.round(1.5 + 1.5 * bs);                     // 0..3 px Brust hoch
+      var ws = Math.sin(tp * Math.PI / 40);                // alle ~40 Ticks Gewicht wechseln
+      wsK = ws;
+      idleX = Math.round(ws * 3);
+      dipY = Math.round(Math.max(0, -bs) * 1);             // beim Ausatmen sackt die Hüfte 1 px
+      var lt = (tick + p.id * 61) % 230;                   // gelegentlich umschauen
+      if (lt < 34) look = (lt < 5 || lt > 28) ? -1 : -2;
+      else if (lt >= 120 && lt < 136) look = 1;
+      if (id === 'toni' && (tp % 224) < 16) idleX += 3;     // Schultern rollen
+      if (id === 'nina') dipY += ((tp >> 4) % 2) * 2;      // wippt auf den Rollen
+      if (id === 'lola') idleX += Math.round(Math.sin(tp * 0.11) * 2); // Hüftschwung
+      if (id === 'rocco' && (tp % 160) < 24) br += 1;      // pumpt die Brust
+      if (id === 'biel' && (tp % 176) < 16) idleX -= 3;
     }
+    if (moving) dipY = FIG_WDIP[walk];
+    // Angriffs-Körper: Ausholen lädt (Dip), Impact streckt, Recovery setzt sich
+    if (mv) {
+      if (phase === 'wind') dipY = Math.round(wt * prog * (kick ? 1 : 1.5));
+      else if (impact) dipY = -wt;
+      else if (phase === 'rec') dipY = Math.round(wt * (1 - prog));
+    }
+    if (stun) dipY = 2;
     if (win) { h = c.h; w = c.w + 8; }
     if (blink && p.invuln > 0 && (p.invuln % 2 === 0)) return;
     var lidZu = !stun && !mv && ((tick + p.id * 37) % 150) < 6;
@@ -553,17 +592,20 @@
 
     // Lehnen (lokal, + = nach vorn)
     var leanL = idleX;
-    if (stun) leanL -= 10;
-    if (phase === 'wind') leanL -= 6;
-    else if (phase === 'hit') leanL += kick ? -6 : ((id === 'rocco' && art === 'heavy') ? 20 : 10);
-    else if (phase === 'rec') leanL += kick ? -2 : 4;
+    var stK = stun ? Math.min(1, p.stun / 10) : 0;          // Knockback klingt mit dem Stun ab
+    if (stun) leanL -= Math.round(10 + 8 * stK);
+    if (moving) leanL += wDir > 0 ? 3 : -2;
+    var hitLean = kick ? -6 : ((id === 'rocco' && art === 'heavy') ? 20 : 6 + wt * 3);
+    if (phase === 'wind') leanL -= Math.round((2 + wt * 3) * prog);
+    else if (phase === 'hit') leanL += hitLean + (impact ? (kick ? -2 : 4) : 0);
+    else if (phase === 'rec') leanL += Math.round((kick ? -2 : hitLean * 0.5) * (1 - prog));
     var by = y - h;
 
     // ---- Lokale Zeichen-Helfer (gespiegelt nach facing) ----
-    var OX = 0;
+    var OX = 0, OY = 0;
     function M(lx, ly, ww, hh2, col) {
       if (ww <= 0 || hh2 <= 0) return;
-      lx += OX;
+      lx += OX; ly += OY;
       rct(ctx, f > 0 ? x + lx : x - lx - ww, by + ly, ww, hh2, col);
     }
     function K(lx, ly, ww, hh2, col) {
@@ -642,17 +684,19 @@
     // ---- Layout ----
     var hw = L.hw, hh = L.hh, tw = L.tw, lw = L.lw, bootH = L.boot;
     var legH = crouch ? 26 : L.lg;
-    var tt = hh - 2, tb = h - legH, hipY = tb - 6;
+    var tt = hh - 2 - br, tb = h - legH, hipY = tb - 6;
     var shY = tt + 7, shF = Math.round(tw * 0.18), shB = -Math.round(tw * 0.24);
-    var kopfX = (crouch ? 6 : 0) + (stun ? -6 : 0) + (phase === 'hit' && !kick ? 4 : 0) + (phase === 'wind' ? -2 : 0);
+    var kopfX = (crouch ? 6 : 0) + (stun ? -6 - Math.round(4 * stK) : 0) + (phase === 'hit' && !kick ? 4 : 0) +
+      (phase === 'wind' ? -2 - wt : 0) + look + (moving ? wDir : 0);
     var kL = Math.round(kopfX - hw / 2);
     var ey = Math.round(hh * 0.4);
 
     // ---- Arm-Posen: [ellbogenX, ellbogenY, handX, handY] ----
-    var sw = moving ? [4, 0, -4, 0][walk] : 0;
-    var aF = [shF + 6 + sw, shY + 22, shF + 24 + sw, shY + 8 + idle * 2];
-    var aB = [shB + 10 - sw, shY + 24, Math.round(tw / 2) + 6 - sw, shY + 14 + idle * 2];
-    if (id === 'toni' && !mv) aF = [shF + 4 + sw, shY + 24, shF + 14 + sw, shY + 40];
+    var sw = moving ? FIG_WARM[walk] : 0;
+    var hb2 = idleOn ? Math.round(1 - br * 0.5 + wsK) : 0;      // Hände sinken beim Einatmen leicht nach
+    var aF = [shF + 6 + Math.round(sw * 0.6), shY + 22, shF + 24 + sw, shY + 8 + hb2 - Math.round(Math.max(0, sw) * 0.4)];
+    var aB = [shB + 10 - Math.round(sw * 0.6), shY + 24, Math.round(tw / 2) + 6 - sw, shY + 14 + hb2 - Math.round(Math.max(0, -sw) * 0.4)];
+    if (id === 'toni' && !mv) aF = [shF + 4 + Math.round(sw * 0.6), shY + 24, shF + 14 + sw, shY + 40 + hb2];
     if (crouch) {
       aF = [shF + 10, shY + 16, shF + 26, shY + 2];
       aB = [shB + 12, shY + 18, Math.round(tw / 2) + 8, shY + 8];
@@ -661,18 +705,25 @@
       aF = [shF + 16, shY + 20, shF + 20, shY - 6];
       aB = [shB + 14, shY + 18, shF + 14, shY + 2];
     }
+    // Luft: steigen = Arme hoch, Apex = kompakt, fallen = Arme seitlich zum Balancieren
+    var airK = air ? (vy < -5 ? 0 : (vy > 5 ? 2 : 1)) : 0;
     if (air && !mv && !stun) {
-      aF = [shF + 8, shY + 4, shF + 22, shY - 10];
-      aB = [shB - 6, shY + 6, shB - 16, shY - 6];
+      if (airK === 0) { aF = [shF + 8, shY + 4, shF + 22, shY - 10]; aB = [shB - 6, shY + 6, shB - 16, shY - 6]; }
+      else if (airK === 1) { aF = [shF + 12, shY + 14, shF + 22, shY + 2]; aB = [shB + 8, shY + 16, shB + 22, shY + 6]; }
+      else { aF = [shF + 14, shY + 2, shF + 28, shY + 4]; aB = [shB - 10, shY + 2, shB - 24, shY - 2]; }
     }
     if (stun) {
-      aF = [shF - 2, shY + 6, shF + 6, shY - 18];
-      aB = [shB - 8, shY + 4, shB - 14, shY - 16];
+      var fl2 = Math.round(6 * stK) + ((tick >> 2) % 2) * 2;
+      aF = [shF - 2, shY + 6 - fl2, shF + 6 - fl2, shY - 18 - fl2];
+      aB = [shB - 8 - fl2, shY + 4, shB - 14 - fl2, shY - 16 - fl2];
     }
+    var winPulse = win && ((tick + p.id * 11) % 30) < 2;   // 1-Tick-Pulse: Arm schnellt hoch, Prop glänzt
     if (win) {
-      aF = [shF + 4, shY - 18, shF + 6, shY - 38];
+      var wp = winPulse ? 6 : 0;
+      aF = [shF + 4, shY - 18 - (wp >> 1), shF + 6, shY - 38 - wp];
       aB = [shB - 4, shY - 18, shB - 6, shY - 38];
     }
+    var gwx = 0, gwy = 0;
     if (mv && !kick) {
       var armLy = clamp(h - (mv.high || 56) - 16, shY - 10, shY + 24);
       var R = clamp(mv.reach * 0.5, 34, 72);
@@ -680,12 +731,17 @@
         (art === 'special' && id === 'toni') || (art === 'special' && id === 'biel' && phase === 'wind') ||
         (art === 'air' && id === 'toni');
       var fx, fy;
+      // Ausholpunkt (prog = 1) — Startpunkt der Ghost-Spur im Active
+      if (over) { gwx = shF - 6 - wt * 2; gwy = shY - 36 - wt * 3; }
+      else { gwx = shF - 8 - wt * 5; gwy = shY + 6 - (wt - 1) * 3; }
       if (phase === 'wind') {
-        if (over) { fx = shF - 6; fy = shY - 30 - 6 * prog; }
+        // Ease-out: schnell hoch, kurz halten -> lesbar
+        var pe = 1 - (1 - prog) * (1 - prog);
+        if (over) { fx = shF - 6 - wt * 2 * pe; fy = shY - 24 - (12 + wt * 3) * pe; }
         else if (art === 'special' && id === 'nina') { fx = shF + 12; fy = shY + 14; }
-        else { fx = shF - 4 - 10 * prog; fy = shY + 6; }
+        else { fx = shF - 4 - (4 + wt * 5) * pe; fy = shY + 6 - (wt - 1) * 3 * pe; }
       } else {
-        fx = shF + 8 + R * ext; fy = armLy;
+        fx = shF + 8 + R * ext + (impact ? 4 + wt * 2 : 0); fy = armLy;
         if (over) fy = armLy + 10 * ext;
         if (art === 'special' && id === 'toni') { fx = shF + 28; fy = h - 54; }
         if (art === 'air' && id === 'toni') { fx = shF + 18; fy = shY + 30; }
@@ -695,14 +751,18 @@
       }
       aF = [Math.round((shF + fx) / 2 - (phase === 'wind' ? 6 : 0)),
         Math.round((shY + fy) / 2 + 6 * (1 - Math.max(0, ext))), Math.round(fx), Math.round(fy)];
-      aB = [shB + 8, shY + 20, shB + 20, shY + 10];
+      // Hinterer Arm als Gegengewicht: Ausholen = Deckung vor, Treffer = zur Hüfte gerissen
+      if (phase === 'wind') aB = [shB + 12, shY + 18, shF + 4, shY + 4];
+      else if (phase === 'hit') aB = [shB + 2, shY + 22, shB + 4 - wt * 2, shY + 14];
+      else aB = [shB + 8, shY + 20, shB + 20, shY + 10];
       if (art === 'special' && (id === 'rocco' || id === 'nina')) {
         aB = [Math.round((shB + fx) / 2), aF[1] + 6, Math.round(fx) - 6, Math.round(fy) + 8];
       }
     }
     if (kick) {
-      if (id === 'lola') { aF = [shF + 2, shY - 12, shF - 4, shY - 34]; aB = [shB - 10, shY + 8, shB - 24, shY + 2]; }
-      else { aF = [shF - 8, shY + 14, shF - 24, shY + 8]; aB = [shB - 10, shY + 12, shB - 26, shY + 2]; }
+      var ka = phase === 'hit' ? 6 : (phase === 'wind' ? Math.round(6 * prog) : Math.round(6 * (1 - prog)));
+      if (id === 'lola') { aF = [shF + 2, shY - 12 - (ka >> 1), shF - 4, shY - 34 - ka]; aB = [shB - 10 - ka, shY + 8, shB - 24 - ka, shY + 2 - ka]; }
+      else { aF = [shF - 8, shY + 14, shF - 24 - ka, shY + 8 - ka]; aB = [shB - 10, shY + 12, shB - 26 - ka, shY + 2 - (ka >> 1)]; }
     }
 
     // ---- Glieder ----
@@ -765,51 +825,97 @@
       schuh(ax, ay, front);
     }
     function standBein(hx0, fx0, lift, kf, col, front) {
-      var ay = h - bootH - lift;
-      var kx = Math.round((hx0 + fx0) / 2 + kf), ky = Math.round(hipY + (ay - hipY) * 0.5 - lift * 0.4);
-      bein(hx0, hipY, kx, ky, fx0, ay, col, front);
+      var ay = h - bootH - lift, hy = hipY + dipY;
+      // Dip beugt das Knie nach vorn statt das Bein zu stauchen
+      var kx = Math.round((hx0 + fx0) / 2 + kf + Math.max(0, dipY) * 1.5), ky = Math.round(hy + (ay - hy) * 0.5 - lift * 0.4);
+      bein(hx0, hy, kx, ky, fx0, ay, col, front);
     }
     function beine() {
       var hf = Math.round(tw * 0.14 + leanL * 0.8), hb = Math.round(-tw * 0.14 + leanL * 0.8);
       var bf = Math.round(tw * 0.14), bb = Math.round(-tw * 0.14);
       var colF = LK.hose, colB = hexShade(LK.hose, -14);
+      var hy = hipY + dipY;
       if (crouch) {
-        bein(hb, hipY, hb + 2, h - lw / 2 - 2, hb - 16, h - bootH, colB, false);
-        bein(hf, hipY, hf + 22, hipY + 2, hf + 12, h - bootH, colF, true);
+        bein(hb, hy, hb + 2, h - lw / 2 - 2, hb - 16, h - bootH, colB, false);
+        bein(hf, hy, hf + 22, hy + 2, hf + 12, h - bootH, colF, true);
         return;
       }
       if (air) {
-        bein(hb, hipY, hb + 6, hipY + 18, hb - 8, hipY + 30, colB, false);
-        if (!kick) bein(hf, hipY, hf + 18, hipY + 10, hf + 8, hipY + 26, colF, true);
+        if (stun || mv || airK === 1) {         // Apex / Treffer: kompakt
+          bein(hb, hy, hb + 12, hy + 12, hb - 4, hy + 24, colB, false);
+          if (!kick) bein(hf, hy, hf + 20, hy + 2, hf + 6, hy + 18, colF, true);
+        } else if (airK === 0) {                // Steigen: Absprungbein lang, vorderes Knie hoch
+          bein(hb, hy, hb + 2, hy + 22, hb - 6, hy + 42, colB, false);
+          bein(hf, hy, hf + 18, hy + 6, hf + 10, hy + 26, colF, true);
+        } else {                                // Fallen: Beine leicht geöffnet, bereit zur Landung
+          bein(hb, hy, hb - 6, hy + 20, hb - 14, hy + 38, colB, false);
+          bein(hf, hy, hf + 14, hy + 18, hf + 18, hy + 36, colF, true);
+        }
         return;
       }
-      // [fussX rel., lift, knieVor]
-      var A = [10, 0, 4], B = [-10, 0, 4];
+      // je Bein: fussX rel., lift, knieVor
+      var ax = 10, al = 0, ak = 4, bx = -10, bl = 0, bk = 4, wa, wb;
       if (moving) {
-        var WK = [[16, 0, 4, -14, 0, 4], [4, 0, 4, 2, 12, 10], [-14, 0, 4, 16, 0, 4], [2, 12, 10, 4, 0, 4]][walk];
-        A = [WK[0], WK[1], WK[2]]; B = [WK[3], WK[4], WK[5]];
-      } else if (mv) { A = [18 + (phase === 'hit' ? 6 : 0), 0, 6]; B = [-18, 0, 2]; }
-      else if (blk) { A = [6, 0, 6]; B = [-16, 0, 2]; }
-      else if (stun) { A = [16, 6, 2]; B = [-12, 0, 0]; }
-      else if (win) { A = [14, 0, 2]; B = [-14, 0, 2]; }
-      if (kick) B = [-4, 0, 2];
-      standBein(hb, bb + B[0], B[1], B[2], colB, false);
-      if (!kick) standBein(hf, bf + A[0], A[1], A[2], colF, true);
+        wa = FIG_WALK[walk]; wb = FIG_WALK[(walk + 3) % 6];
+        ax = wa[0]; al = wa[1]; ak = wa[2]; bx = wb[0]; bl = wb[1]; bk = wb[2];
+      } else if (mv) {
+        ax = 18 + (phase === 'hit' ? 6 : 0) + (impact ? 4 : 0); ak = 6 + wt;
+        bx = -18 - (phase === 'wind' ? Math.round(wt * 2 * prog) : 0); bk = 2;
+      }
+      else if (blk) { ax = 6; ak = 6; bx = -16; bk = 2; }
+      else if (stun) { ax = 16 + Math.round(6 * stK); al = 6; ak = 2; bx = -12 - Math.round(4 * stK); bk = 0; }
+      else if (win) { ax = 14; ak = 2; bx = -14; bk = 2; }
+      else if (idleOn) {                         // Gewicht auf ein Bein -> dessen Knie beugt
+        ak = 4 + Math.round(Math.max(0, wsK) * 3); bk = 4 + Math.round(Math.max(0, -wsK) * 3);
+      }
+      if (kick) { bx = -4 - (phase === 'hit' ? 4 : 0); bl = 0; bk = 2; }
+      standBein(hb, bb + bx, bl, bk, colB, false);
+      if (!kick) standBein(hf, bf + ax, al, ak, colF, true);
     }
     function kickBein() {
-      var hf = Math.round(tw * 0.14 + leanL * 0.8);
-      var col = LK.hose;
+      var hf = Math.round(tw * 0.14 + leanL * 0.8), hy = hipY + dipY;
+      var col = LK.hose, kx, ky, ax, ay, g;
       if (phase === 'wind') {
-        bein(hf, hipY, hf + 16, hipY - 10, hf + 6, hipY + 14, col, true);
+        // Chamber: Knie zieht hoch, Fuß klappt ein (ease-out, damit die Pose steht)
+        var pe = 1 - (1 - prog) * (1 - prog);
+        var ay0 = air ? hy + 26 : h - bootH;
+        kx = Math.round(hf + 4 + 14 * pe); ky = Math.round(hy + 22 - (art === 'air' ? 28 : 34) * pe);
+        ax = Math.round(hf + 8 - 4 * pe); ay = Math.round(ay0 + (hy + 14 - ay0) * pe);
+        bein(hf, hy, kx, ky, ax, ay, col, true);
         return;
       }
-      var e = Math.max(0.35, ext);
-      var KL = clamp(mv.reach * 0.45, 40, 72) * e;
-      var kyL = mv.low ? h - 16 : (art === 'air' ? hipY + 24 : clamp(h - (mv.high || 48) - 32, hipY - 44, hipY));
-      var ax = Math.round(hf + KL), ay = Math.round(kyL);
-      var kx = Math.round(hf + KL * 0.45), ky = Math.round((hipY + ay) / 2 - 4);
+      var KL0 = clamp(mv.reach * 0.45, 40, 72);
+      var tyL = mv.low ? h - 16 : (art === 'air' ? hy + 24 : clamp(h - (mv.high || 48) - 32, hy - 44, hy));
+      var a1 = Math.atan2(tyL - hy, KL0);
+      // Bogen-Start: aus dem Chamber von unten; Lolas Diagonal-Tritt kommt von oben (Overhead)
+      var a0 = (id === 'lola' && art === 'air') ? a1 - 1.1 : 1.1;
+      var k = atkF - mv.startup, s, ang, KL;
       if (phase === 'hit') {
-        bogen(hf, hipY, KL + 12, 1.1, Math.atan2(ay - hipY, KL), 10, FIG_TRAIL[id]);
+        if (mv.hits > 1) { var half = Math.ceil(mv.active / mv.hits); s = Math.min(1, ((k % half) + 1.5) / 2); }
+        else s = Math.min(1, (k + 1.5) / 2);
+        s = 1 - (1 - s) * (1 - s);
+        ang = a0 + (a1 - a0) * s;
+        KL = KL0 * (impact ? 1.08 : 1);
+      } else {
+        s = 1;
+        ang = a1 + (1.2 - a1) * (1 - ext);
+        KL = KL0 * Math.max(0.45, ext);
+      }
+      var ca = Math.cos(ang), sa = Math.sin(ang);
+      ax = Math.round(hf + ca * KL); ay = Math.round(hy + sa * KL);
+      var bend = (1 - s * 0.85) * 14 + (phase === 'rec' ? 10 * (1 - ext) : 0);
+      kx = Math.round(hf + ca * KL * 0.5 + sa * bend); ky = Math.round(hy + sa * KL * 0.5 - ca * bend);
+      var fw = bootH + 8, fh = lw + 4;
+      if (phase === 'hit') {
+        var tc = FIG_TRAIL[id];
+        bogen(hf, hy, KL + 12, a0, ang, 10, tc);
+        // Ghost-Füße entlang des Bogens
+        for (g = 1; g <= 3; g++) {
+          var ga = ang - (ang - a0) * g * 0.26;
+          alpha(0.42 - g * 0.11);
+          M(Math.round(hf + Math.cos(ga) * KL) - 4, Math.round(hy + Math.sin(ga) * KL - fh / 2), fw, fh, tc);
+        }
+        alpha(1);
         if (id === 'nina') { // Blitz-Spur
           alpha(0.8);
           seg(ax - 50, ay - 8, ax - 36, ay + 4, 3, '#ffe080');
@@ -818,14 +924,13 @@
           alpha(1);
         }
       }
-      glied([hf, hipY, kx, ky, ax, ay], lw, col, hexShade(col, -8));
-      var fw = bootH + 8, fh = lw + 4;
+      glied([hf, hy, kx, ky, ax, ay], lw, col, hexShade(col, -8));
       K(ax - 4, Math.round(ay - fh / 2), fw, fh, LK.stiefel);
       M(ax - 2, Math.round(ay - fh / 2) + 2, fw - 4, 2, hexShade(LK.stiefel, 28));
       M(ax + fw - 8, Math.round(ay - fh / 2), 4, fh, ink);
       if (id === 'nina') for (var r = 0; r < 3; r++) K(ax + fw - 4, Math.round(ay - fh / 2) + r * 7, 7, 7, '#ffb040');
       if (id === 'lola') { M(ax - 7, Math.round(ay + fh / 2) - 3, 4, 6, ink); M(ax, Math.round(ay - fh / 2) + 3, fw - 10, 2, accent); }
-      if (phase === 'hit' && atkF === mv.startup) stern(ax + fw + 4, ay, 12, '#ffe080');
+      if (impact) stern(ax + fw + 4, ay, 14, '#ffe080');
     }
     function faust(hx0, hy0, col, open) {
       var s = LK.t >= 13 ? 16 : 14, r = s >> 1;
@@ -914,8 +1019,8 @@
     }
     function rockLola() {
       var x0 = -tw / 2, xx, yy;
-      var sway = moving ? [4, 0, -4, 0][walk] : (idleX ? 4 : 0);
-      var flare = (kick && phase !== 'wind') ? 14 : (stun ? 6 : 0);
+      var sway = moving ? Math.round(FIG_WARM[walk] * 0.4) : Math.round(idleX * 0.8);
+      var flare = (kick && phase !== 'wind') ? (impact ? 18 : 14) : (stun ? 6 + Math.round(4 * stK) : 0);
       var top = tb - 4, bot = crouch ? h - 2 : (air ? h - 30 : h - 28);
       var t2 = top + Math.round((bot - top) * 0.3), t3 = top + Math.round((bot - top) * 0.58);
       var l3 = x0 - 14 - sway * 2 - (flare >> 1), w3 = tw + 28 + flare * 2;
@@ -1045,9 +1150,10 @@
         if (lidZu) { M(ex, ey + 2, ew, 2, ink); continue; }
         M(ex - 1, ey - 1, ew + 2, 7, ink);
         M(ex, ey, ew, 5, weiss);
-        M(ex + ew - 4, ey + 1, 3, 4, cfg.iris || '#3a1a0a');
-        M(ex + ew - 3, ey + 2, 2, 2, '#050203');
-        M(ex + ew - 4, ey + 1, 1, 1, '#ffffff');
+        var ix = look < 0 ? ex + 1 : ex + ew - 4, iy = look > 0 ? ey : ey + 1;  // Blick folgt dem Look-around
+        M(ix, iy, 3, 4, cfg.iris || '#3a1a0a');
+        M(ix + 1, iy + 1, 2, 2, '#050203');
+        M(ix, iy, 1, 1, '#ffffff');
       }
       var bd = (mv || blk) ? 2 : 0;
       M(e1 - 1, ey - 6, 5, 3, cfg.brow); M(e1 + 3, ey - 5 + bd, 6, 3, cfg.brow);
@@ -1169,18 +1275,23 @@
       M(kx + (kw >> 1) - 2, ky + (kh >> 1) - 2, 4, 4, '#c09048');
     }
     function toniHammer() {
-      var hd = [0.35, 1], hot = false;
+      // Pendel: Atmen / Gewichtswechsel / Schritt lassen den hängenden Hammer leicht schwingen
+      var hdx = 0.35 + (idleOn ? wsK * 0.12 : 0) + (moving ? -sw * 0.025 : 0), hdy = 1, hot = false;
       if (mv) {
-        if (art === 'light') hd = phase === 'wind' ? [-0.4, -1] : [1, 0.15];
-        else if (art === 'heavy') hd = phase === 'wind' ? [-0.5, -1] : (phase === 'hit' ? [1, 0.7] : [0.5, 1]);
-        else if (art === 'special') hd = phase === 'wind' ? [-0.2, -1] : [0.35, 1];
-        else hd = [0.2, 1];
+        if (art === 'light') { if (phase === 'wind') { hdx = -0.4; hdy = -1; } else { hdx = 1; hdy = 0.15; } }
+        else if (art === 'heavy') {
+          if (phase === 'wind') { hdx = -0.5 - 0.3 * prog; hdy = -1; }      // weit hinter den Kopf
+          else if (phase === 'hit') { hdx = 1; hdy = impact ? 0.9 : 0.7; }
+          else { hdx = 0.5; hdy = 1; }
+        }
+        else if (art === 'special') { if (phase === 'wind') { hdx = -0.2 - 0.2 * prog; hdy = -1; } else { hdx = 0.35; hdy = 1; } }
+        else { hdx = 0.2; hdy = 1; }
         hot = phase === 'hit';
-      } else if (blk || win) hd = [0.15, -1];
-      else if (stun) hd = [-0.6, 0.8];
-      else if (crouch) hd = [1, 0.4];
-      else if (air) hd = [-0.6, -0.8];
-      hammer(aF[2], aF[3], hd[0], hd[1], hot);
+      } else if (blk || win) { hdx = 0.15; hdy = -1; }
+      else if (stun) { hdx = -0.6; hdy = 0.8; }
+      else if (crouch) { hdx = 1; hdy = 0.4; }
+      else if (air) { hdx = -0.6; hdy = -0.8; }
+      hammer(aF[2], aF[3], hdx, hdy, hot || winPulse);
       if (art === 'special' && phase !== 'wind') {
         var gx = aF[2] + 18;
         alpha(0.9);
@@ -1240,9 +1351,12 @@
           for (i = 0; i < 5; i++) M(hx0 + 4 + ((d + i * 13) % 40), hy0 - 12 + ((i * 17 + atkF * 3) % 26), 3, 3, '#ff5a70');
           alpha(1);
         } else {
-          seg(hx0 + 2, hy0 - 4, hx0 + 6, hy0 - 16, 2, '#2a5a20');
-          M(hx0 + 3, hy0 - 12, 4, 2, '#3a7a30');
-          rose(hx0 + 1, hy0 - 27, 1);
+          var rs = idleOn ? Math.round(Math.sin(tp * 0.09) * 2) : (moving ? Math.round(-sw * 0.3) : 0);
+          if (phase === 'wind') rs = -Math.round(4 * prog);  // Rose kippt zurück = Ausholen lesbar
+          seg(hx0 + 2, hy0 - 4, hx0 + 6 + rs, hy0 - 16, 2, '#2a5a20');
+          M(hx0 + 3 + (rs >> 1), hy0 - 12, 4, 2, '#3a7a30');
+          rose(hx0 + 1 + rs, hy0 - 27, 1);
+          if (winPulse) stern(hx0 + 7 + rs, hy0 - 21, 6, '#fff0c0');
         }
       } else if (id === 'nina') {
         if (art === 'special') {
@@ -1254,7 +1368,17 @@
     }
 
     // ===== Zeichnen =====
-    OX = leanL;
+    var tcol = FIG_TRAIL[id] || accent;
+    OX = leanL; OY = dipY;
+    // Special-Aura im Ausholen (theatralisch, flackert)
+    if (mv && art === 'special' && phase === 'wind') {
+      var au = 4 + Math.round(8 * prog) + ((tick >> 1) % 2) * 2, x0a = -Math.round(tw / 2);
+      alpha(0.1 + 0.16 * prog); M(x0a - au, tt - au, tw + au * 2, h - tt + au - 6, tcol);
+      alpha(0.14 + 0.2 * prog); M(x0a - (au >> 1), tt + 4, tw + au, tb - tt, accent);
+      alpha(0.55);
+      for (var ai = 0; ai < 3; ai++) M(x0a - 6 + ai * ((tw >> 1) + 6), tb - ((tick * 5 + ai * 23) % 70), 3, 9, '#fff0c0');
+      alpha(1);
+    }
     if (id === 'biel' && !(art === 'special' && phase !== 'wind')) netzRuecken();
     if (id === 'rocco' && art === 'heavy' && phase === 'hit') {
       alpha(0.45);
@@ -1263,30 +1387,52 @@
     }
     arm(aB, shB, false);
 
-    OX = 0;
+    OX = 0; OY = 0;
     beine();
+    // Heavy/Special: Staub am Standfuß beim Impact = Gewicht
+    if (impact && wt >= 2 && !air) {
+      alpha(0.5);
+      M(-Math.round(tw * 0.14) - 34, h - 6, 18, 5, '#6a4a30'); M(-Math.round(tw * 0.14) - 46, h - 10, 10, 4, '#5a3a24');
+      alpha(1);
+    }
 
-    OX = leanL;
+    OX = leanL; OY = dipY;
     if (id === 'toni') torsoToni();
     else if (id === 'lola') { torsoLola(); rockLola(); }
     else if (id === 'rocco') torsoRocco();
     else if (id === 'nina') torsoNina();
     else torsoBiel();
 
+    OY = dipY - br;                     // Kopf hebt sich mit dem Brustkorb
     if (id === 'toni') kopfToni();
     else if (id === 'lola') kopfLola();
     else if (id === 'rocco') kopfRocco();
     else if (id === 'nina') kopfNina();
     else kopfBiel();
+    OY = dipY;
 
-    if (kick) { OX = 0; kickBein(); OX = leanL; }
+    if (kick) { OX = 0; OY = 0; kickBein(); OX = leanL; OY = dipY; }
 
-    // Trail hinter dem vorderen Arm
+    // Trail hinter dem vorderen Arm + Ghost-Fäuste vom Ausholpunkt zur Faust
     if (mv && !kick && phase === 'hit') {
-      var tc = FIG_TRAIL[id] || accent;
       var overArc = (art === 'heavy' && (id === 'biel' || id === 'toni')) || (art === 'air' && id === 'toni');
-      if (overArc) bogen(shF, shY, Math.max(30, aF[2] - shF + 10), -2.2, Math.atan2(aF[3] - shY, Math.max(1, aF[2] - shF)), 10, tc);
-      alpha(0.3); seg(shF, shY, aF[2], aF[3], LK.t + 8, tc);
+      var gs = LK.t + 6, gi, gx2, gy2;
+      if (overArc) {
+        var rr = Math.max(30, aF[2] - shF + 10), ga1 = Math.atan2(aF[3] - shY, Math.max(1, aF[2] - shF));
+        bogen(shF, shY, rr, -2.2, ga1, 10, tcol);
+        for (gi = 1; gi <= 3; gi++) {
+          var gang = ga1 + (-2.2 - ga1) * gi * 0.22;
+          gx2 = shF + Math.cos(gang) * (rr - 10); gy2 = shY + Math.sin(gang) * (rr - 10);
+          alpha(0.4 - gi * 0.1); M(Math.round(gx2 - gs / 2), Math.round(gy2 - gs / 2), gs, gs, tcol);
+        }
+      } else {
+        for (gi = 1; gi <= 3; gi++) {
+          var gt = 1 - gi * 0.24;
+          gx2 = gwx + (aF[2] - gwx) * gt; gy2 = gwy + (aF[3] - gwy) * gt;
+          alpha(0.4 - gi * 0.1); M(Math.round(gx2 - gs / 2), Math.round(gy2 - gs / 2), gs, gs, tcol);
+        }
+      }
+      alpha(0.3); seg(shF, shY, aF[2], aF[3], LK.t + 8, tcol);
       alpha(0.55); M(aF[2] - 26, aF[3] - 3, 16, 4, '#ff4a18'); M(aF[2] - 38, aF[3] + 3, 12, 2, '#ffb040');
       alpha(1);
     }
@@ -1295,7 +1441,11 @@
     arm(aF, shF, true);
     propVorne();
 
-    if (mv && !kick && phase === 'hit' && atkF === mv.startup && !mv.projectile) stern(aF[2] + 12, aF[3], 12, '#ffe080');
+    // Impact-Frame: Faust blitzt weiß, Stern skaliert mit Gewicht
+    if (impact && !kick && !mv.projectile) {
+      alpha(0.6); M(aF[2] - 9, aF[3] - 9, 18, 18, '#fff8ee'); alpha(1);
+      stern(aF[2] + 12, aF[3], 12 + wt * 2, '#ffe080');
+    }
 
     // Block-Schild
     if (blk) {
@@ -1306,7 +1456,7 @@
       alpha(1);
     }
 
-    // Win-Pose: Funken-Krone + Char-Flair
+    // Win-Pose: Funken-Krone + Char-Flair (+ 1-Tick-Pulse)
     if (win) {
       var wy = -(((tick / 6) | 0) % 2) * 4, kx2 = Math.round(kopfX);
       M(kx2 - 16, -34 + wy, 32, 12, '#ffb040');
@@ -1316,6 +1466,10 @@
       else if (id === 'nina') { M(aF[2] - 3, aF[3] - 50, 6, 40, '#ffe080'); M(aF[2] - 16, aF[3] - 36, 32, 6, '#ffb040'); sonne(aF[2], aF[3] - 20, 8); }
       else if (id === 'biel') { K(aB[2] - 14, aB[3] - 10, 28, 16, '#e8c090'); M(aB[2] - 10, aB[3] - 8, 20, 4, '#c03020'); M(aB[2] - 6, aB[3] - 2, 12, 2, '#a0a030'); }
       else if (id === 'rocco') { K(aF[2] - 10, aF[3] - 12, 20, 6, accent); }
+      if (winPulse) {
+        M(kx2 - 4, -52 + wy, 8, 6, '#fff8ee');
+        if (id !== 'lola') stern(aF[2] + 2, aF[3] - 10, 9, '#fff8ee');
+      }
       ctx.fillStyle = 'rgba(255,176,64,0.35)';
       ctx.fillRect(x - 72, BODEN - 8, 144, 16);
       ctx.fillStyle = 'rgba(255,224,128,0.25)';
@@ -1327,13 +1481,15 @@
       ctx.fillStyle = 'rgba(255,80,20,0.4)';
       ctx.fillRect(Math.round(x + f * leanL - w / 2 - 8), by - 12, w + 16, h + 16);
     }
-    // Stun-Sterne
+    // Stun-Sterne (v1.5: 4 statt 3)
     if (stun) {
-      for (var si = 0; si < 3; si++) {
-        var sa = tick * 0.15 + si * 2.094;
-        stern(Math.round(kopfX + Math.cos(sa) * 24), Math.round(-14 + Math.sin(sa) * 6), 6, si % 2 ? '#ffe080' : '#ffb040');
+      OY = dipY;
+      for (var si = 0; si < 4; si++) {
+        var sa = tick * 0.15 + si * 1.571;
+        stern(Math.round(kopfX + Math.cos(sa) * 26), Math.round(-14 + Math.sin(sa) * 7), si === 3 ? 5 : 6, si % 2 ? '#ffe080' : '#ffb040');
       }
     }
+    OX = 0; OY = 0;
     ctx.globalAlpha = 1;
 
     if (invert) {
