@@ -1,9 +1,14 @@
-/* Einstieg, Spielschleife, Host/Client-Logik. v2.6 — Solo/Testmodus. */
+/* Einstieg, Spielschleife, Host/Client-Logik. v2.7 — Solo/Testmodus. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION = 'v2.6';
+  var VERSION = 'v2.7';
   Plaza.VERSION = VERSION;
+  function sanitizeName(n) {
+    n = String(n == null ? '' : n).replace(/[\u0000-\u001f<>]/g, '').trim();
+    if (n.length > 16) n = n.slice(0, 16);
+    return n || 'Spieler';
+  }
 
   function params() {
     var q = {};
@@ -202,20 +207,20 @@
         }
       }
       if (!n) n = meinName || '';
-      n = n.replace(/[<>]/g, '').slice(0, 14);
+      n = sanitizeName(n);
       meinName = n;
       try { if (n) localStorage.setItem('plazaName', n); } catch (e2) {}
       fields.forEach(function (f) { if (n && !(f.value || '').trim()) f.value = n; });
       return n;
     }
     function syncNameFields(n) {
-      n = (n || meinName || '').slice(0, 14);
+      n = sanitizeName(n || meinName || '');
       nameFields().forEach(function (f) { if (f) f.value = n; });
     }
 
     function setUrl(raum, isHost) {
       try {
-        var q = '?raum=' + encodeURIComponent(raum || '') + '&v=1.0';
+        var q = '?raum=' + encodeURIComponent(raum || '') + '&v=' + (Plaza.Netz && Plaza.Netz.VERSION_Q ? Plaza.Netz.VERSION_Q : VERSION.replace(/^v/, ''));
         if (isHost) q += '&host=1';
         history.replaceState(null, '', q);
       } catch (e) {}
@@ -253,7 +258,7 @@
         mode = 'menue';
         ui.showScreen('menue');
         ui.setStatus('');
-        Plaza.Render.menueHint(render, 'Versus · Solo · v2.6');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v2.7');
       },
       onHost: function () {
         soloMode = false;
@@ -537,7 +542,7 @@
           }
         }
         if (msg.typ === 'rematch' && netz.istHost() && kampf) {
-          // v2.6: nur aus Endphase, Version prüfen, Doppel-Rematch ignorieren
+          // v2.7: nur aus Endphase, Version prüfen, Doppel-Rematch ignorieren
           if (kampf.phase !== 'ende' && mode !== 'ende') {
             /* ignore mid-fight rematch spam */
           } else if (msg.ver && msg.ver !== VERSION) {
@@ -706,7 +711,7 @@
         }
         acc = 0;
       } else if (mode === 'menue') {
-        Plaza.Render.menueHint(render, 'Versus · Solo · v2.6');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v2.7');
         acc = 0;
       } else {
         Plaza.Render.menueHint(render, statusElText());
@@ -747,7 +752,7 @@
     document.addEventListener('webkitfullscreenchange', function () { updateFsButton(); _skKey = ''; skalieren(); });
     skalieren();
     if ('serviceWorker' in navigator) {
-      try { navigator.serviceWorker.register('sw.js?v=2.6'); } catch (eSw) {}
+      try { navigator.serviceWorker.register('sw.js?v=2.7'); } catch (eSw) {}
     }
     requestAnimationFrame(loop);
   }
