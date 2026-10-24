@@ -1,0 +1,220 @@
+/* Prozeduraler Plaza/Kampf-Sound (WebAudio, 0 Assets). */
+(function (g) {
+  'use strict';
+  var Plaza = g.Plaza = g.Plaza || {};
+
+  var ctx = null, master = null, sfxBus = null, ambBus = null, mute = false, vol = 0.55;
+  var noiseBuf = null, ambNodes = null, lastHp = [100, 100], lastAtk = [null, null];
+  var lastPhase = '', lastCd = -1, lastGround = [true, true];
+
+  function ensure() {
+    if (ctx) return true;
+    try {
+      var AC = g.AudioContext || g.webkitAudioContext;
+      if (!AC) return false;
+      ctx = new AC();
+      master = ctx.createGain();
+      master.gain.value = vol;
+      master.connect(ctx.destination);
+      var comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -18; comp.knee.value = 12; comp.ratio.value = 4;
+      comp.attack.value = 0.003; comp.release.value = 0.12;
+      sfxBus = ctx.createGain(); sfxBus.gain.value = 1;
+      sfxBus.connect(comp); comp.connect(master);
+      ambBus = ctx.createGain(); ambBus.gain.value = 0.18;
+      ambBus.connect(master);
+      noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 0.5, ctx.sampleRate);
+      var d = noiseBuf.getChannelData(0);
+      for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      try {
+        var m = g.localStorage && g.localStorage.getItem('plaza.mute');
+        var v = g.localStorage && g.localStorage.getItem('plaza.vol');
+        if (m === '1') mute = true;
+        if (v != null) { vol = Math.max(0, Math.min(1, parseFloat(v) || 0.55)); master.gain.value = mute ? 0 : vol; }
+      } catch (e0) {}
+      return true;
+    } catch (e) { ctx = null; return false; }
+  }
+
+  function resume() {
+    if (!ensure()) return;
+    try { if (ctx.state === 'suspended') ctx.resume(); } catch (e) {}
+  }
+
+  function ton(typ, f0, f1, dauer, v, bus) {
+    if (!ctx || mute) return;
+    try {
+      var t = ctx.currentTime, o = ctx.createOscillator(), gn = ctx.createGain();
+      o.type = typ || 'square';
+      o.frequency.setValueAtTime(Math.max(1, f0), t);
+      o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dauer);
+      gn.gain.setValueAtTime(Math.max(0.0001, v), t);
+      gn.gain.exponentialRampToValueAtTime(0.0001, t + dauer);
+      o.connect(gn); gn.connect(bus || sfxBus);
+      o.start(t); o.stop(t + dauer + 0.03);
+    } catch (e) {}
+  }
+
+  function rausch(dauer, v, hpHz) {
+    if (!ctx || mute || !noiseBuf) return;
+    try {
+      var t = ctx.currentTime;
+      var src = ctx.createBufferSource(); src.buffer = noiseBuf;
+      var f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = hpHz || 2000;
+      var gn = ctx.createGain();
+      gn.gain.setValueAtTime(Math.max(0.0001, v), t);
+      gn.gain.exponentialRampToValueAtTime(0.0001, t + dauer);
+      src.connect(f); f.connect(gn); gn.connect(sfxBus);
+      src.start(t); src.stop(t + dauer + 0.02);
+    } catch (e) {}
+  }
+
+  function sfx(name, opts) {
+    opts = opts || {};
+    if (!ensure() || mute) return;
+    resume();
+    var pitch = opts.pitch || 1;
+    try {
+      switch (name) {
+        case 'ui': ton('square', 880 * pitch, 1320 * pitch, 0.05, 0.12); break;
+        case 'cd': ton('triangle', 440 * pitch, 440 * pitch, 0.12, 0.18); break;
+        case 'los':
+          ton('square', 220, 220, 0.28, 0.14);
+          ton('square', 261.6, 261.6, 0.28, 0.12);
+          ton('square', 329.6, 329.6, 0.28, 0.1);
+          rausch(0.08, 0.2, 1500);
+          break;
+        case 'swingL': rausch(0.06, 0.12, 3000); ton('sine', 700 * pitch, 300 * pitch, 0.06, 0.1); break;
+        case 'swingH': rausch(0.14, 0.18, 1200); ton('sawtooth', 300 * pitch, 90 * pitch, 0.14, 0.14); break;
+        case 'hitL': ton('square', 220 * pitch, 90 * pitch, 0.08, 0.16); rausch(0.02, 0.15, 4000); break;
+        case 'hitH':
+          ton('square', 160 * pitch, 40 * pitch, 0.18, 0.2);
+          ton('sine', 70, 35, 0.2, 0.22);
+          rausch(0.1, 0.22, 800);
+          break;
+        case 'jump': ton('triangle', 300 * pitch, 600 * pitch, 0.08, 0.1); break;
+        case 'land': ton('sine', 120, 60, 0.1, 0.14); rausch(0.05, 0.08, 600); break;
+        case 'ko':
+          ton('sawtooth', 600, 60, 0.45, 0.18);
+          setTimeout(function () { ton('sine', 523, 523, 0.5, 0.16); ton('sine', 1046, 1046, 0.55, 0.1); }, 280);
+          break;
+        case 'win':
+          [330, 370, 415, 494, 587].forEach(function (f, i) {
+            setTimeout(function () { ton('triangle', f, f * 1.02, 0.18, 0.14); }, i * 90);
+          });
+          break;
+        case 'special-biel': ton('triangle', 330, 330, 0.25, 0.14); ton('triangle', 495, 495, 0.28, 0.12); break;
+        case 'special-lola':
+          ton('sine', 659, 659, 0.08, 0.12);
+          setTimeout(function () { ton('sine', 784, 784, 0.08, 0.12); }, 50);
+          setTimeout(function () { ton('sine', 988, 988, 0.1, 0.12); }, 100);
+          rausch(0.12, 0.08, 5000);
+          break;
+        case 'special-toni': ton('sine', 90, 30, 0.35, 0.24); rausch(0.25, 0.2, 200); break;
+        case 'special-rocco': ton('sawtooth', 110, 70, 0.22, 0.18); ton('sine', 80, 40, 0.2, 0.16); break;
+        case 'special-nina': ton('sawtooth', 200, 1200, 0.22, 0.12); ton('sine', 1320, 1320, 0.1, 0.1); break;
+        default: break;
+      }
+    } catch (e) {}
+  }
+
+  function startAmbient() {
+    if (!ensure() || mute || ambNodes) return;
+    try {
+      // Zikaden-ähnliches gefiltertes Rauschen
+      var src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+      var bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 4200; bp.Q.value = 8;
+      var g = ctx.createGain(); g.gain.value = 0.04;
+      src.connect(bp); bp.connect(g); g.connect(ambBus);
+      src.start();
+      ambNodes = { src: src, g: g };
+      // gelegentliche Glocke
+      ambNodes.bell = setInterval(function () {
+        if (mute || !ctx) return;
+        ton('sine', 784, 784, 0.6, 0.04, ambBus);
+        ton('sine', 1175, 1175, 0.5, 0.03, ambBus);
+      }, 22000);
+    } catch (e) {}
+  }
+
+  function stopAmbient() {
+    if (!ambNodes) return;
+    try { ambNodes.src.stop(); } catch (e) {}
+    if (ambNodes.bell) clearInterval(ambNodes.bell);
+    ambNodes = null;
+  }
+
+  function setMute(b) {
+    mute = !!b;
+    if (master) master.gain.value = mute ? 0 : vol;
+    try { if (g.localStorage) g.localStorage.setItem('plaza.mute', mute ? '1' : '0'); } catch (e) {}
+    if (mute) stopAmbient(); else startAmbient();
+  }
+
+  function toggleMute() { setMute(!mute); return mute; }
+  function isMute() { return mute; }
+
+  function resetDiff() {
+    lastHp = [999, 999]; lastAtk = [null, null]; lastPhase = ''; lastCd = -1; lastGround = [true, true];
+  }
+
+  function fromSnap(snap) {
+    if (!snap || !snap.p) return;
+    if (!ensure()) return;
+    try {
+      // Countdown
+      if (snap.phase === 'countdown' && snap.countdown !== lastCd) {
+        if (snap.countdown > 0) sfx('cd');
+        else sfx('los');
+        lastCd = snap.countdown;
+      }
+      // Phase ende
+      if (snap.phase === 'ende' && lastPhase !== 'ende') {
+        sfx('ko');
+        setTimeout(function () { sfx('win'); }, 400);
+      }
+      lastPhase = snap.phase;
+
+      for (var i = 0; i < 2; i++) {
+        var p = snap.p[i];
+        if (!p) continue;
+        var c = Plaza.Chars && Plaza.Chars.finde ? Plaza.Chars.finde(p.charId) : null;
+        var pitch = (c && c.sound && c.sound.hitPitch) || 1;
+
+        // Hit
+        if (typeof lastHp[i] === 'number' && p.hp < lastHp[i]) {
+          var d = lastHp[i] - p.hp;
+          sfx(d >= 10 ? 'hitH' : 'hitL', { pitch: pitch });
+        }
+        lastHp[i] = p.hp;
+
+        // Swing / special
+        var art = p.atk && p.atk.art;
+        if (art && art !== lastAtk[i]) {
+          if (art === 'special') sfx('special-' + p.charId, { pitch: pitch });
+          else sfx(art === 'heavy' ? 'swingH' : 'swingL', { pitch: pitch });
+        }
+        lastAtk[i] = art || null;
+
+        // Land
+        if (lastGround[i] === false && p.grounded) sfx('land', { pitch: pitch });
+        // Jump approx: left ground
+        if (lastGround[i] === true && p.grounded === false && !p.atk) sfx('jump', { pitch: pitch });
+        lastGround[i] = !!p.grounded;
+      }
+    } catch (e) {}
+  }
+
+  Plaza.Sound = {
+    init: function () { ensure(); resume(); startAmbient(); },
+    resume: resume,
+    sfx: sfx,
+    setMute: setMute,
+    toggleMute: toggleMute,
+    isMute: isMute,
+    fromSnap: fromSnap,
+    resetDiff: resetDiff,
+    startAmbient: startAmbient,
+    stopAmbient: stopAmbient
+  };
+})(typeof window !== 'undefined' ? window : globalThis);

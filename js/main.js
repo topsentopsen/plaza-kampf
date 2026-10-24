@@ -2,7 +2,7 @@
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION = 'v0.2';
+  var VERSION = 'v0.3';
   Plaza.VERSION = VERSION;
 
   function params() {
@@ -45,7 +45,7 @@
 
     function setUrl(raum, isHost) {
       try {
-        var q = '?raum=' + encodeURIComponent(raum || '') + '&v=0.2';
+        var q = '?raum=' + encodeURIComponent(raum || '') + '&v=0.3';
         if (isHost) q += '&host=1';
         history.replaceState(null, '', q);
       } catch (e) {}
@@ -77,8 +77,14 @@
       onRetry: function () {
         ui.setStatus('Nochmal…');
         ui.showRetry(false);
+        if (Plaza.Sound) Plaza.Sound.init();
         if (netz) netz.retry();
         ui.showScreen('warte');
+      },
+      onMute: function () {
+        if (!Plaza.Sound) return true;
+        Plaza.Sound.init();
+        return Plaza.Sound.toggleMute();
       },
       onWahl: function (id) {
         meinChar = id;
@@ -120,6 +126,8 @@
       kampf.countdown = 3;
       mode = 'kampf';
       ui.showScreen('kampf');
+      if (Plaza.Sound) Plaza.Sound.resetDiff();
+      if (Plaza.Render.resetFx) Plaza.Render.resetFx();
       broadcast();
     }
 
@@ -235,7 +243,12 @@
       Plaza.Render.menueHint(render, 'Raum erstellen oder beitreten');
     }
 
+    document.addEventListener('pointerdown', function () {
+      if (Plaza.Sound) Plaza.Sound.resume();
+    }, { passive: true });
+
     canvas.addEventListener('pointerdown', function () {
+      if (Plaza.Sound) Plaza.Sound.resume();
       if (letzterSnap && letzterSnap.phase === 'ende') {
         if (netz && netz.istHost() && kampf) {
           kampf = Plaza.Kampf.rematch(kampf);
@@ -278,7 +291,7 @@
         Plaza.Render.zeichne(render, letzterSnap, seite);
         acc = 0;
       } else if (mode === 'menue') {
-        Plaza.Render.menueHint(render, 'Versus · 2 Handys · v0.2');
+        Plaza.Render.menueHint(render, 'Versus · 2 Handys · v0.3');
         acc = 0;
       } else {
         Plaza.Render.menueHint(render, statusElText());

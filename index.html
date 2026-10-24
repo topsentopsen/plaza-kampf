@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>Plaza-Kampf v0.2</title>
+<title>Plaza-Kampf v0.3</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%23b9a3f5'/%3E%3Ccircle cx='4' cy='10' r='3' fill='%235ec8b8'/%3E%3Ccircle cx='12' cy='10' r='3' fill='%23ff8a4d'/%3E%3Cpath d='M7 6h2v2H7z' fill='%23ffd36e'/%3E%3C/svg%3E">
 <style>
   html, body { margin: 0; height: 100%; background: #3a2e48; overflow: hidden; touch-action: manipulation;
@@ -21,8 +21,8 @@
   #overlay { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center;
     pointer-events: none; z-index: 5; padding-bottom: env(safe-area-inset-bottom, 8px); }
   #overlay:not([hidden]) { pointer-events: auto; }
-  .screen { width: min(420px, 96vw); background: #fff8ee; color: #4a3560; border-radius: 16px 16px 0 0;
-    padding: 16px 16px 20px; box-shadow: 0 -8px 30px rgba(0,0,0,.35); max-height: 72vh; overflow: auto; }
+  .screen { width: min(440px, 96vw); background: #fff8ee; color: #4a3560; border-radius: 16px 16px 0 0;
+    padding: 16px 16px 20px; box-shadow: 0 -8px 30px rgba(0,0,0,.35); max-height: 74vh; overflow: auto; }
   .screen[hidden] { display: none !important; }
   .screen h1 { margin: 0 0 4px; font-size: 22px; }
   .screen p { margin: 0 0 12px; font-size: 14px; color: #8a74a8; }
@@ -38,10 +38,15 @@
     padding: 12px; font: inherit; color: #4a3560; background: #fff; }
   .chars { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .char-card { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left;
-    background: #f3e9ff; color: #4a3560; box-shadow: 0 2px 0 #cbb6f0; }
+    background: #f3e9ff; color: #4a3560; box-shadow: 0 2px 0 #cbb6f0; padding: 10px; }
   .char-card.aktiv { outline: 3px solid #ffd36e; background: #fff3c9; }
-  .char-card .swatch { width: 100%; height: 18px; border-radius: 6px; }
-  .char-card small { font-weight: 500; color: #8a74a8; font-size: 11px; }
+  .char-card .swatch { width: 100%; height: 14px; border-radius: 6px; }
+  .char-card .spitz { font-style: normal; font-size: 11px; font-weight: 700; color: #9580dc; }
+  .char-card .lore { font-weight: 500; color: #8a74a8; font-size: 10px; line-height: 1.25; display: block; margin: 2px 0; }
+  .char-card small { font-weight: 500; color: #8a74a8; font-size: 10px; }
+  .char-card .pips { display: flex; gap: 2px; margin: 2px 0; }
+  .char-card .pips i { width: 7px; height: 7px; border-radius: 2px; background: #d8c8f0; display: inline-block; }
+  .char-card .pips i.an { background: #5ec8b8; }
   #raum-link { word-break: break-all; font-size: 12px; background: #f3e9ff; padding: 8px; border-radius: 8px; }
   #raum-code { font-size: 28px; letter-spacing: 0.2em; font-weight: 800; color: #9580dc; text-align: center; margin: 8px 0; }
   #controls { position: fixed; left: 0; right: 0; bottom: 0; z-index: 4;
@@ -58,18 +63,21 @@
   .actions button[data-k="c"] { background: #ffd36e; }
   .pad button.down, .actions button.down { transform: translateY(3px); box-shadow: 0 0 0 3px #4a3560; }
   .hint { font-size: 12px; color: #8a74a8; margin-top: 8px; }
-  #version { position: fixed; top: 6px; right: 10px; font-size: 11px; color: #b9a3f5; opacity: .8; z-index: 6; }
+  #version { position: fixed; top: 6px; right: 10px; font-size: 11px; color: #b9a3f5; opacity: .85; z-index: 6; }
+  #mute { position: fixed; top: 4px; left: 8px; z-index: 6; width: 40px; height: 40px; padding: 0;
+    border-radius: 50%; font-size: 18px; background: #4a3560; box-shadow: 0 2px 0 #2a1e38; }
 </style>
 </head>
 <body>
-<div id="version">Plaza-Kampf v0.2</div>
+<button type="button" id="mute" data-act="mute" aria-label="Ton aus">🔊</button>
+<div id="version">Plaza-Kampf v0.3</div>
 <div id="rahmen"><canvas id="spiel" width="320" height="180"></canvas></div>
 <div id="status"></div>
 
 <div id="overlay">
   <div class="screen" data-screen="menue">
     <h1>Plaza-Kampf</h1>
-    <p>Retro-Versus für zwei Handys. Ein Raum, ein Link — und los.</p>
+    <p>la Pelea de la Plaza — Retro-Versus für zwei Handys. Ein Raum, ein Link.</p>
     <div class="row">
       <button type="button" data-act="host">Raum erstellen</button>
       <button type="button" class="secondary" data-act="join">Beitreten</button>
@@ -77,7 +85,7 @@
     <div class="row">
       <input id="raum-input" type="text" placeholder="Raum-Code" autocomplete="off" autocapitalize="off" spellcheck="false">
     </div>
-    <p class="hint">v0.2: Verbindung über öffentlichen MQTT-Broker (Fallback PeerJS+TURN). Beide Handys: Tab offen lassen, nicht sperren. Statuszeile beobachten.</p>
+    <p class="hint">v0.3: Plaza-Arena mit Tiefe, Sound, Charaktere mit Lore. Multiplayer wie v0.2 (MQTT + PeerJS). Tab offen lassen. Ton: Klingelschalter am iPhone?</p>
   </div>
 
   <div class="screen" data-screen="warte" hidden>
@@ -89,7 +97,7 @@
       <button type="button" class="accent" data-act="join-now" hidden>Jetzt beitreten</button>
       <button type="button" data-act="retry" hidden>Nochmal</button>
     </div>
-    <p class="hint">Gast: Link öffnen, dann <strong>Jetzt beitreten</strong> tippen. Host teilt nur den Link ohne &amp;host=1. Bei Fehler: Nochmal.</p>
+    <p class="hint">Gast: Link öffnen, dann <strong>Jetzt beitreten</strong> tippen. Host teilt nur den Link ohne &amp;host=1.</p>
   </div>
 
   <div class="screen" data-screen="wahl" hidden>
@@ -114,11 +122,13 @@
 
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="js/chars.js?v=0.2"></script>
-<script src="js/kampf.js?v=0.2"></script>
-<script src="js/netz.js?v=0.2"></script>
-<script src="js/render.js?v=0.2"></script>
-<script src="js/ui.js?v=0.2"></script>
-<script src="js/main.js?v=0.2"></script>
+<script src="js/palette.js?v=0.3"></script>
+<script src="js/chars.js?v=0.3"></script>
+<script src="js/kampf.js?v=0.3"></script>
+<script src="js/netz.js?v=0.3"></script>
+<script src="js/sound.js?v=0.3"></script>
+<script src="js/render.js?v=0.3"></script>
+<script src="js/ui.js?v=0.3"></script>
+<script src="js/main.js?v=0.3"></script>
 </body>
 </html>

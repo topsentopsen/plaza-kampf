@@ -12,6 +12,7 @@
     var onRematch = opts.onRematch || function () {};
     var onInput = opts.onInput || function () {};
     var onRetry = opts.onRetry || function () {};
+    var onMute = opts.onMute || function () {};
     var getLink = opts.getLink || function () { return ''; };
 
     var overlay = root.querySelector('#overlay');
@@ -44,14 +45,24 @@
         b.type = 'button';
         b.className = 'char-card';
         b.dataset.id = c.id;
+        var st = c.stats || { tempo: 3, kraft: 3, reich: 3 };
+        function pips(n) {
+          var s = '';
+          for (var i = 1; i <= 5; i++) s += '<i class="' + (i <= n ? 'an' : '') + '"></i>';
+          return s;
+        }
         b.innerHTML = '<span class="swatch" style="background:' + c.farbe + '"></span>' +
           '<strong>' + c.name + '</strong>' +
+          '<em class="spitz">' + (c.spitzname || '') + '</em>' +
+          '<small class="lore">' + (c.lore || '') + '</small>' +
+          '<span class="pips" title="Tempo">' + pips(st.tempo) + '</span>' +
           '<small>' + c.moves.light.name + ' · ' + c.moves.heavy.name + ' · ' + c.moves.special.name + '</small>';
         if (selId === c.id) b.classList.add('aktiv');
         b.addEventListener('click', function () {
           var alle = box.querySelectorAll('.char-card');
           for (var i = 0; i < alle.length; i++) alle[i].classList.remove('aktiv');
           b.classList.add('aktiv');
+          if (Plaza.Sound) Plaza.Sound.sfx('ui');
           onWahl(c.id);
         });
         box.appendChild(b);
@@ -117,9 +128,19 @@
       var joinInput = overlay.querySelector('#raum-input');
       var copyBtn = overlay.querySelector('[data-act="copy"]');
       var rematchBtn = overlay.querySelector('[data-act="rematch"]');
-      if (hostBtn) hostBtn.addEventListener('click', function () { onHost(); });
+      if (hostBtn) hostBtn.addEventListener('click', function () {
+        if (Plaza.Sound) { Plaza.Sound.init(); Plaza.Sound.sfx('ui'); }
+        onHost();
+      });
       if (joinBtn) joinBtn.addEventListener('click', function () {
+        if (Plaza.Sound) { Plaza.Sound.init(); Plaza.Sound.sfx('ui'); }
         onJoin((joinInput && joinInput.value || '').trim());
+      });
+      var muteBtn = root.querySelector('[data-act="mute"]');
+      if (muteBtn) muteBtn.addEventListener('click', function () {
+        var m = onMute();
+        muteBtn.textContent = m ? '🔇' : '🔊';
+        muteBtn.setAttribute('aria-label', m ? 'Ton an' : 'Ton aus');
       });
       if (copyBtn) copyBtn.addEventListener('click', function () {
         var link = getLink();
@@ -134,6 +155,7 @@
       if (retryBtn) retryBtn.addEventListener('click', function () { onRetry(); });
       var joinNow = overlay.querySelector('[data-act="join-now"]');
       if (joinNow) joinNow.addEventListener('click', function () {
+        if (Plaza.Sound) { Plaza.Sound.init(); Plaza.Sound.sfx('ui'); }
         var codeEl = overlay.querySelector('#raum-code');
         onJoin((codeEl && codeEl.textContent || '').trim());
       });
