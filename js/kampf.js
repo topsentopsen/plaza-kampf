@@ -1,4 +1,4 @@
-/* Autoritative Kampfsimulation (läuft auf dem Host). */
+/* Autoritative Kampfsimulation (läuft auf dem Host). v0.4: Block, Duck, Luft-A, Armor/Hits/Dash. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -13,17 +13,18 @@
       x: seite === 0 ? 80 : 240, y: BODEN, vx: 0, vy: 0,
       facing: seite === 0 ? 1 : -1, grounded: true,
       hp: c.hp, maxHp: c.hp,
-      stun: 0, crouch: false,
-      atk: null, atkFrame: 0, hitDone: false,
-      invuln: 0, combo: 0,
+      stun: 0, crouch: false, blocking: false,
+      atk: null, atkFrame: 0, hitDone: false, hitCount: 0,
+      invuln: 0, combo: 0, armorLeft: 0,
+      hitSeq: 0, hitKind: '',
       input: { l: false, r: false, u: false, d: false, a: false, b: false, c: false },
-      prev: { a: false, b: false, c: false, u: false }
+      prev: { a: false, b: false, c: false, u: false, d: false }
     };
   }
 
   function neu(charA, charB) {
     return {
-      tick: 0, phase: 'kampf', // kampf | ende | countdown
+      tick: 0, phase: 'kampf',
       countdown: 3, zeit: ROUND_ZEIT,
       p: [spielerNeu(0, charA || 'biel'), spielerNeu(1, charB || 'toni')],
       projektil: [],
@@ -35,26 +36,42 @@
   function setInput(st, seite, inp) {
     var p = st.p[seite];
     if (!p) return;
-    p.prev = { a: p.input.a, b: p.input.b, c: p.input.c, u: p.input.u };
+    p.prev = { a: p.input.a, b: p.input.b, c: p.input.c, u: p.input.u, d: p.input.d };
     p.input = {
       l: !!inp.l, r: !!inp.r, u: !!inp.u, d: !!inp.d,
       a: !!inp.a, b: !!inp.b, c: !!inp.c
     };
   }
 
+  function moveArt(p, taste) {
+    // Luft-A: in der Luft Light als air
+    if (taste === 'a' && !p.grounded) return 'air';
+    return taste === 'a' ? 'light' : taste === 'b' ? 'heavy' : 'special';
+  }
+
   function startAtk(p, art) {
     if (p.atk || p.stun > 0) return;
+    if (p.blocking) return;
     var c = Plaza.Chars.finde(p.charId);
     var m = c.moves[art];
-    if (!m) return;
+    if (!m) {
+      // Fallback: air → light wenn nicht definiert
+      if (art === 'air') m = c.moves.light;
+      if (!m) return;
+      art = 'light';
+    }
     p.atk = { art: art, m: m };
     p.atkFrame = 0;
     p.hitDone = false;
+    p.hitCount = 0;
+    p.armorLeft = (m.armor && m.armor.hits) || (m.armor ? 1 : 0);
   }
 
   function hitbox(p) {
     var c = Plaza.Chars.finde(p.charId);
-    return { x: p.x - c.w / 2, y: p.y - c.h, w: c.w, h: c.h };
+    var h = p.crouch ? Math.floor(c.h * 0.62) : c.h;
+    var w = c.w;
+    return { x: p.x - w / 2, y: p.y - h, w: w, h: h };
   }
 
   function atkBox(p) {
@@ -62,74 +79,206 @@
     var m = p.atk.m;
     var f = p.atkFrame;
     if (f < m.startup || f >= m.startup + m.active) return null;
-    if (m.projectile) return null;
+    if (m.projectile || (m.proj && m.proj.typ)) return null;
     var reach = m.reach;
     var x = p.facing > 0 ? p.x : p.x - reach;
-    return { x: x, y: p.y - m.high - 8, w: reach, h: m.high + 8, throw: !!m.throw };
+    var high = m.high;
+    var yOff = p.crouch ? 4 : 8;
+    return { x: x, y: p.y - high - yOff, w: reach, h: high + yOff, throw: !!m.throw, overhead: !!m.overhead, low: !!m.low };
   }
 
   function overlaps(a, b) {
     return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
   }
 
+  function istBlock(ang, opf, m) {
+    if (!opf.grounded || opf.atk || opf.stun > 0) return false;
+    if (m.throw || m.unblockbar) return false;
+    var weg = (opf.facing > 0) ? opf.input.l : opf.input.r;
+    if (!weg) return false;
+    // Overhead trifft Duck-Block nicht als Block (muss stehend geblockt werden)
+    if (m.overhead && opf.crouch) return false;
+    // Low trifft stehenden Block nicht (muss geduckt)
+    if (m.low && !opf.crouch) return false;
+    return true;
+  }
+
+  function hatArmor(p) {
+    if (!p.atk || !p.atk.m.armor) return false;
+    var a = p.atk.m.armor;
+    var f = p.atkFrame;
+    return f >= (a.von || 0) && f <= (a.bis || 999) && p.armorLeft > 0;
+  }
+
   function schaden(st, ang, opf, m) {
-    if (opf.invuln > 0 || opf.hp <= 0) return;
+    if (opf.invuln > 0 || opf.hp <= 0) return false;
+    // Hyper-Armor beim Opfer
+    if (hatArmor(opf)) {
+      opf.armorLeft--;
+      opf.hitSeq++;
+      opf.hitKind = 'armor';
+      return false;
+    }
+    if (istBlock(ang, opf, m)) {
+      var chip = Math.max(1, Math.ceil(m.dmg * 0.1));
+      opf.hp = Math.max(0, opf.hp - chip);
+      opf.stun = 6;
+      opf.vx = ang.facing * m.knock * 0.4;
+      opf.blocking = true;
+      opf.hitSeq++;
+      opf.hitKind = 'block';
+      return true;
+    }
     opf.hp = Math.max(0, opf.hp - m.dmg);
     opf.stun = 12 + Math.floor(m.dmg / 2);
     opf.vx = ang.facing * m.knock;
     opf.vy = m.throw ? -4 : -1.5;
     opf.grounded = false;
     opf.atk = null;
+    opf.blocking = false;
+    opf.crouch = false;
     opf.invuln = 8;
+    opf.hitSeq++;
+    opf.hitKind = m.dmg >= 14 ? 'heavy' : (m.throw ? 'throw' : 'light');
     ang.combo = (ang.combo || 0) + 1;
     if (m.throw) {
       opf.x = ang.x + ang.facing * 28;
       opf.y = BODEN - 10;
     }
+    // Cancel-Fenster für Angreifer
+    if (ang.atk && ang.atk.m.cancel) ang._cancel = ang.atk.m.cancel;
+    return true;
+  }
+
+  
+  function ext(a, b) {
+    var o = {}, k;
+    for (k in a) if (Object.prototype.hasOwnProperty.call(a, k)) o[k] = a[k];
+    for (k in b) if (Object.prototype.hasOwnProperty.call(b, k)) o[k] = b[k];
+    return o;
+  }
+
+  function spawnProj(st, p, m) {
+    var c = Plaza.Chars.finde(p.charId);
+    var pr = m.proj || {};
+    var typ = pr.typ || 'ball';
+    var base = {
+      owner: p.id, farbe: c.farbe, accent: c.accent,
+      dmg: pr.dmg != null ? pr.dmg : m.dmg,
+      knock: pr.knock != null ? pr.knock : m.knock,
+      typ: typ, low: !!pr.low, overhead: !!pr.overhead
+    };
+    if (typ === 'fächer' || typ === 'faecher') {
+      var angles = pr.angles || [-0.35, 0, 0.35];
+      for (var i = 0; i < angles.length; i++) {
+        var ang = angles[i];
+        var spd = pr.spd || 2.4;
+        st.projektil.push(ext(base, {
+          x: p.x + p.facing * 14, y: p.y - 18,
+          vx: p.facing * Math.cos(ang) * spd,
+          vy: Math.sin(ang) * spd,
+          w: 8, h: 8, life: pr.life || 40
+        }));
+      }
+      return;
+    }
+    if (typ === 'bodenwelle') {
+      st.projektil.push(ext(base, {
+        x: p.x + p.facing * 12, y: BODEN - 4,
+        vx: p.facing * (pr.vx || 2.2), vy: 0,
+        w: 14, h: 8, life: pr.life || 28, low: true
+      }));
+      return;
+    }
+    // Standard-Ball / ladbarer Sonnenball
+    var scale = pr.scale || 1;
+    st.projektil.push(ext(base, {
+      x: p.x + p.facing * 16, y: p.y - 18,
+      vx: p.facing * (pr.vx || 3.2) * scale,
+      vy: pr.vy || 0,
+      w: Math.round(10 * scale), h: Math.round(8 * scale),
+      life: pr.life || 50,
+      dmg: Math.round(base.dmg * scale)
+    }));
   }
 
   function updateSpieler(st, p, dt) {
     var c = Plaza.Chars.finde(p.charId);
     var inp = p.input;
     if (p.invuln > 0) p.invuln--;
+    p.blocking = false;
+
+    // Duck / Block-Haltung
+    if (p.stun <= 0 && !p.atk && p.grounded) {
+      p.crouch = !!inp.d;
+      var weg = (p.facing > 0) ? inp.l : inp.r;
+      if (weg) {
+        // Block wenn weg vom Gegner (facing-basiert)
+        p.blocking = weg;
+      }
+      // Während Duck langsamer / kein Sprint
+      if (p.crouch) p.blocking = weg || p.blocking;
+    } else if (!p.grounded) {
+      p.crouch = false;
+    }
+
     if (p.stun > 0) {
       p.stun--;
       p.vx *= 0.85;
     } else if (!p.atk) {
       var dir = (inp.r ? 1 : 0) - (inp.l ? 1 : 0);
-      if (dir) {
+      // Beim Blocken nicht vorwärts laufen
+      if (p.blocking) {
+        p.vx *= 0.5;
+      } else if (dir && !p.crouch) {
         p.vx = dir * c.speed;
         p.facing = dir;
+      } else if (dir && p.crouch) {
+        p.vx = dir * c.speed * 0.35;
       } else {
         p.vx *= 0.7;
         if (Math.abs(p.vx) < 0.05) p.vx = 0;
       }
-      if (inp.u && !p.prev.u && p.grounded) {
+      if (inp.u && !p.prev.u && p.grounded && !p.crouch) {
         p.vy = -c.jump;
         p.grounded = false;
       }
-      if (inp.a && !p.prev.a) startAtk(p, 'light');
+      // Cancel aus vorherigem Treffer
+      if (p._cancel && inp.c && !p.prev.c) {
+        p._cancel = null;
+        startAtk(p, 'special');
+      } else if (inp.a && !p.prev.a) startAtk(p, moveArt(p, 'a'));
       else if (inp.b && !p.prev.b) startAtk(p, 'heavy');
       else if (inp.c && !p.prev.c) startAtk(p, 'special');
     } else {
       p.vx *= 0.85;
+      // Dash während Active
+      var m0 = p.atk.m;
+      if (m0.dash && p.atkFrame >= m0.startup && p.atkFrame < m0.startup + m0.active) {
+        p.vx = p.facing * (m0.dash / Math.max(1, m0.active));
+      }
+      // Cancel on hit
+      if (p._cancel && inp.c && !p.prev.c) {
+        var cancelTo = p._cancel;
+        p._cancel = null;
+        p.atk = null;
+        startAtk(p, cancelTo);
+      }
     }
 
     if (p.atk) {
       p.atkFrame++;
       var m = p.atk.m;
       var total = m.startup + m.active + m.recovery;
-      // Projektil spawnen bei Active-Start
-      if (m.projectile && p.atkFrame === m.startup && !p.hitDone) {
+      var isProj = !!(m.projectile || (m.proj && m.proj.typ));
+      if (isProj && p.atkFrame === m.startup && !p.hitDone) {
         p.hitDone = true;
-        st.projektil.push({
-          x: p.x + p.facing * 16, y: p.y - 18,
-          vx: p.facing * 3.2, vy: 0,
-          w: 10, h: 8, dmg: m.dmg, knock: m.knock,
-          owner: p.id, life: 50, farbe: c.farbe
-        });
+        spawnProj(st, p, m);
       }
-      if (p.atkFrame >= total) p.atk = null;
+      if (p.atkFrame >= total) {
+        p.atk = null;
+        p._cancel = null;
+      }
     }
 
     p.vy += GRAV;
@@ -144,30 +293,59 @@
   }
 
   function updateTreffer(st) {
-    var i, j, a, b, box, hb;
+    var i, j, a, b, box, hb, m, maxHits;
     for (i = 0; i < 2; i++) {
       a = st.p[i];
       b = st.p[1 - i];
       box = atkBox(a);
-      if (!box || a.hitDone) continue;
+      if (!box || !a.atk) continue;
+      m = a.atk.m;
+      maxHits = m.hits || 1;
+      if (a.hitCount >= maxHits) continue;
+      // Multi-Hit: hitDone erst nach allen Hits; zwischen Hits kurzes Fenster
+      if (a.hitDone && maxHits <= 1) continue;
+      if (a.hitCount > 0 && (a.atkFrame - (a._lastHitFrame || 0)) < 3) continue;
       hb = hitbox(b);
+      // Overhead verfehlt Duck nicht — trifft; Low verfehlt Jump
+      if (m.low && !b.grounded) continue;
       if (overlaps(box, hb)) {
-        a.hitDone = true;
-        schaden(st, a, b, a.atk.m);
+        if (schaden(st, a, b, m)) {
+          a.hitCount++;
+          a._lastHitFrame = a.atkFrame;
+          if (a.hitCount >= maxHits) a.hitDone = true;
+        } else if (b.hitKind === 'armor') {
+          // Armor absorbiert — zählt als Kontakt
+          a.hitCount++;
+          a._lastHitFrame = a.atkFrame;
+          if (a.hitCount >= maxHits) a.hitDone = true;
+        }
       }
     }
     for (i = st.projektil.length - 1; i >= 0; i--) {
       var pr = st.projektil[i];
-      pr.x += pr.vx; pr.life--;
+      pr.x += pr.vx; pr.y += pr.vy || 0; pr.life--;
       if (pr.life <= 0 || pr.x < -20 || pr.x > ARENA_W + 20) {
         st.projektil.splice(i, 1);
         continue;
       }
       for (j = 0; j < 2; j++) {
         if (st.p[j].id === pr.owner) continue;
+        // Bodenwelle trifft nur Grounded
+        if (pr.low && !st.p[j].grounded) continue;
+        // Projectile-Armor (Rocco Schulter)
+        if (hatArmor(st.p[j]) && st.p[j].atk && st.p[j].atk.m.armor && st.p[j].atk.m.armor.proj) {
+          st.p[j].armorLeft--;
+          st.p[j].hitSeq++;
+          st.p[j].hitKind = 'armor';
+          st.projektil.splice(i, 1);
+          break;
+        }
         hb = hitbox(st.p[j]);
         if (overlaps({ x: pr.x - pr.w / 2, y: pr.y - pr.h / 2, w: pr.w, h: pr.h }, hb)) {
-          schaden(st, st.p[pr.owner], st.p[j], { dmg: pr.dmg, knock: pr.knock, throw: false });
+          schaden(st, st.p[pr.owner], st.p[j], {
+            dmg: pr.dmg, knock: pr.knock, throw: false,
+            low: pr.low, overhead: pr.overhead, unblockbar: false
+          });
           st.projektil.splice(i, 1);
           break;
         }
@@ -185,9 +363,8 @@
       var s = dx >= 0 ? 1 : -1;
       a.x -= s * push; b.x += s * push;
     }
-    // Facing zueinander wenn idle
-    if (!a.atk && a.stun <= 0) a.facing = a.x <= b.x ? 1 : -1;
-    if (!b.atk && b.stun <= 0) b.facing = b.x <= a.x ? 1 : -1;
+    if (!a.atk && a.stun <= 0 && !a.blocking) a.facing = a.x <= b.x ? 1 : -1;
+    if (!b.atk && b.stun <= 0 && !b.blocking) b.facing = b.x <= a.x ? 1 : -1;
   }
 
   function tick(st) {
@@ -230,7 +407,7 @@
       tick: st.tick, phase: st.phase, countdown: st.countdown, zeit: st.zeit,
       sieger: st.sieger, endeTimer: st.endeTimer, nachricht: st.nachricht,
       projektil: st.projektil.map(function (p) {
-        return { x: p.x, y: p.y, w: p.w, h: p.h, farbe: p.farbe, owner: p.owner };
+        return { x: p.x, y: p.y, w: p.w, h: p.h, farbe: p.farbe, owner: p.owner, typ: p.typ || 'ball' };
       }),
       p: st.p.map(function (p) {
         return {
@@ -239,7 +416,10 @@
           facing: p.facing, grounded: p.grounded,
           hp: p.hp, maxHp: p.maxHp, stun: p.stun,
           atk: p.atk ? { art: p.atk.art, frame: p.atkFrame } : null,
-          invuln: p.invuln
+          invuln: p.invuln,
+          crouch: !!p.crouch, blk: !!p.blocking,
+          hitSeq: p.hitSeq | 0, hitKind: p.hitKind || '',
+          combo: p.combo | 0
         };
       })
     };

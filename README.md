@@ -1,6 +1,6 @@
-# Plaza-Kampf v0.3
+# Plaza-Kampf v0.4
 
-Retro-Versus auf der *Plaza del Sol*. Statisches HTML/JS (Finca-Feeling).
+Dunkles Versus — *la Pelea del Infierno*. Feuer, Vulkane, ernste Street-Fighter-Chars. Statisches HTML/JS auf GitHub Pages.
 
 **Live:** https://topsentopsen.github.io/plaza-kampf/
 
@@ -35,3 +35,13 @@ Steuerung: ◀ ▶ ▲ · **A** leicht · **B** schwer · **S** Spezial.
 `js/{palette,chars,kampf,netz,sound,render,ui,main}.js` · Tests: `node tests/kampf.test.js`
 
 Design-Plan: siehe Repo-Extern `/workspace/plaza-kampf-claude/design-v0.3-2026-10-24.md`
+
+## v0.4 „Hölle“
+- Extreme dunkle Arena: Blutmond, Vulkane, Lava-Meer, Ruinen, Fackeln
+- Charakter-Redesign: kantige dunkle Outfits/Silhouetten (Street-Fighter-Feeling)
+- UI/HUD/Buttons schwarz-rot mit Feuer-Akzenten
+- Combat-WIP: Block, Duck, Air, Armor, Multi-Hit, Dash/Cancel, Projektile (Host-autoritativ)
+- Multiplayer unverändert: MQTT primary + PeerJS/TURN
+- Cache: hart neu laden mit `?v=0.4`
+
+Live: https://topsentopsen.github.io/plaza-kampf/

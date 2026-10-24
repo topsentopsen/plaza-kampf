@@ -1,8 +1,8 @@
-/* Einstieg, Spielschleife, Host/Client-Logik. v0.2 */
+/* Einstieg, Spielschleife, Host/Client-Logik. v0.4 */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION = 'v0.3';
+  var VERSION = 'v0.4';
   Plaza.VERSION = VERSION;
 
   function params() {
@@ -45,7 +45,7 @@
 
     function setUrl(raum, isHost) {
       try {
-        var q = '?raum=' + encodeURIComponent(raum || '') + '&v=0.3';
+        var q = '?raum=' + encodeURIComponent(raum || '') + '&v=0.4';
         if (isHost) q += '&host=1';
         history.replaceState(null, '', q);
       } catch (e) {}
@@ -91,7 +91,7 @@
         if (netz && netz.istHost()) hostWahl = id;
         else gastWahl = id;
         if (netz && netz.istBereit()) {
-          netz.sende({ typ: 'wahl', charId: id, seite: seite });
+          netz.sende({ typ: 'wahl', charId: id, seite: seite, ver: VERSION });
         }
         ui.setStatus('Gewählt: ' + Plaza.Chars.finde(id).name + ' — warte auf den anderen…');
         if (netz && netz.istHost()) versucheStart();
@@ -193,6 +193,9 @@
           if (netz.istHost()) ui.setStatus('Mitspieler da — Charakter wählen');
         }
         if (msg.typ === 'wahl') {
+          if (msg.ver && msg.ver !== VERSION) {
+            ui.setStatus('Andere Version (' + msg.ver + ') — bitte beide hart neu laden (?v=0.4)');
+          }
           if (netz.istHost()) {
             if (msg.seite === 1) gastWahl = msg.charId;
             if (msg.seite === 0) hostWahl = msg.charId;
@@ -291,7 +294,7 @@
         Plaza.Render.zeichne(render, letzterSnap, seite);
         acc = 0;
       } else if (mode === 'menue') {
-        Plaza.Render.menueHint(render, 'Versus · 2 Handys · v0.3');
+        Plaza.Render.menueHint(render, 'Versus · 2 Handys · v0.4');
         acc = 0;
       } else {
         Plaza.Render.menueHint(render, statusElText());

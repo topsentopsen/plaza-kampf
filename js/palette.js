@@ -1,37 +1,43 @@
-/* Feste Finca/Plaza-Palette — max ~32 Farben. */
+/* Höllen-/Vulkan-Palette — extrem dunkel, Feuer-Akzente. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
   Plaza.Palette = {
-    himmel: ['#6bb8d8', '#7ec8e3', '#93d2e8', '#aadcec', '#c8e9f5', '#e8f0c8', '#f6e3b4', '#f3cf9a'],
-    meer: '#5aa8c8',
-    huegel: '#8fbf8a',
-    huegel2: '#6a9a6e',
-    fassade: '#fff8ee',
-    fassade2: '#f0e4d0',
-    dach: '#c45a40',
-    dach2: '#a84830',
-    laden: '#4a8ec8',
-    bogen: '#e8d8c0',
-    pflasterHell: '#e6c79c',
-    pflasterDunkel: '#dcb98e',
-    pflasterFuge: '#c79f74',
-    medaillon: '#ffd36e',
-    schatten: 'rgba(74,53,96,0.28)',
-    kontur: '#4a3560',
-    uiBg: '#3a2e48',
-    uiFg: '#fff8ee',
-    uiAccent: '#b9a3f5',
-    sonne: '#ffd36e',
-    sonneGlow: '#ffe9a8',
-    wasser: '#7ec8e3',
-    wasserHell: '#fff8ee',
-    palmStamm: '#9a6a4a',
-    palmBlatt: '#5eaf6e',
-    palmBlatt2: '#7ed492',
-    cafeSchirmA: '#ff8a4d',
-    cafeSchirmB: '#fff8ee',
-    brunnen: '#c8b8a0',
-    brunnen2: '#a89880'
+    himmel: ['#050208', '#0a0612', '#120810', '#1a0a0c', '#220c0a', '#2a1008', '#3a1408', '#4a1808'],
+    meer: '#1a0808',          // Lava-See / Blut-Meer
+    huegel: '#1e0c0a',
+    huegel2: '#140808',
+    fassade: '#1a1218',
+    fassade2: '#120c10',
+    dach: '#3a1010',
+    dach2: '#2a0c0c',
+    laden: '#5a1808',         // glutende Fenster
+    bogen: '#181018',
+    pflasterHell: '#1c1210',
+    pflasterDunkel: '#120c0a',
+    pflasterFuge: '#0a0606',
+    medaillon: '#8a2808',
+    schatten: 'rgba(0,0,0,0.55)',
+    kontur: '#000000',
+    uiBg: '#0a0610',
+    uiFg: '#e8d0b0',
+    uiAccent: '#8a3040',
+    sonne: '#ff4a18',         // Blutmond / Höllensonne
+    sonneGlow: '#5a1808',
+    wasser: '#ff2a08',        // Lava
+    wasserHell: '#ffaa40',
+    palmStamm: '#2a1810',
+    palmBlatt: '#1a2810',
+    palmBlatt2: '#243018',
+    cafeSchirmA: '#5a1008',
+    cafeSchirmB: '#2a0808',
+    brunnen: '#2a1818',
+    brunnen2: '#1a1010',
+    lava: '#ff3a08',
+    lavaHell: '#ffb040',
+    lavaDunkel: '#8a1800',
+    rauch: '#1a1018',
+    knochen: '#4a3a30',
+    embers: '#ff6020'
   };
 })(typeof window !== 'undefined' ? window : globalThis);

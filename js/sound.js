@@ -4,7 +4,8 @@
   var Plaza = g.Plaza = g.Plaza || {};
 
   var ctx = null, master = null, sfxBus = null, ambBus = null, mute = false, vol = 0.55;
-  var noiseBuf = null, ambNodes = null, lastHp = [100, 100], lastAtk = [null, null];
+  var noiseBuf = null, ambNodes = null, musicNodes = null, musicInt = 0;
+  var lastHp = [100, 100], lastAtk = [null, null], lastHitSeq = [0, 0];
   var lastPhase = '', lastCd = -1, lastGround = [true, true];
 
   function ensure() {
@@ -113,6 +114,8 @@
         case 'special-toni': ton('sine', 90, 30, 0.35, 0.24); rausch(0.25, 0.2, 200); break;
         case 'special-rocco': ton('sawtooth', 110, 70, 0.22, 0.18); ton('sine', 80, 40, 0.2, 0.16); break;
         case 'special-nina': ton('sawtooth', 200, 1200, 0.22, 0.12); ton('sine', 1320, 1320, 0.1, 0.1); break;
+        case 'block': ton('triangle', 900 * pitch, 400 * pitch, 0.06, 0.12); rausch(0.03, 0.1, 5000); break;
+        case 'armor': ton('sine', 520, 260, 0.12, 0.14); ton('triangle', 780, 780, 0.08, 0.1); break;
         default: break;
       }
     } catch (e) {}
@@ -137,6 +140,62 @@
     } catch (e) {}
   }
 
+
+  function startMusic(intensity) {
+    if (!ensure() || mute) return;
+    intensity = intensity == null ? 0.5 : intensity;
+    musicInt = intensity;
+    if (musicNodes) { setMusicIntensity(intensity); return; }
+    try {
+      var t0 = ctx.currentTime;
+      var g = ctx.createGain(); g.gain.value = 0.045 * intensity;
+      g.connect(master);
+      var notes = [196, 233, 262, 311, 349, 392];
+      var oscs = [];
+      function pulse() {
+        if (!musicNodes || mute) return;
+        var n = notes[(musicNodes.step | 0) % notes.length];
+        musicNodes.step++;
+        var o = ctx.createOscillator(), gn = ctx.createGain();
+        o.type = musicNodes.step % 4 === 0 ? 'triangle' : 'square';
+        o.frequency.value = n * (musicInt > 0.7 ? 1.01 : 1);
+        var now = ctx.currentTime;
+        gn.gain.setValueAtTime(0.0001, now);
+        gn.gain.exponentialRampToValueAtTime(0.08 * musicInt, now + 0.02);
+        gn.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+        o.connect(gn); gn.connect(g);
+        o.start(now); o.stop(now + 0.22);
+      }
+      musicNodes = { g: g, step: 0, iv: setInterval(pulse, 220) };
+      pulse();
+    } catch (e) {}
+  }
+
+  function setMusicIntensity(v) {
+    musicInt = Math.max(0.15, Math.min(1, v));
+    if (musicNodes && musicNodes.g) {
+      try { musicNodes.g.gain.value = 0.045 * musicInt; } catch (e) {}
+    }
+  }
+
+  function stopMusic() {
+    if (!musicNodes) return;
+    try { clearInterval(musicNodes.iv); } catch (e) {}
+    try { musicNodes.g.disconnect(); } catch (e) {}
+    musicNodes = null;
+  }
+
+  function duckMusic(ms) {
+    if (!musicNodes || !musicNodes.g) return;
+    try {
+      var g = musicNodes.g.gain, now = ctx.currentTime;
+      g.cancelScheduledValues(now);
+      g.setValueAtTime(g.value, now);
+      g.linearRampToValueAtTime(0.01, now + 0.03);
+      g.linearRampToValueAtTime(0.045 * musicInt, now + (ms || 180) / 1000);
+    } catch (e) {}
+  }
+
   function stopAmbient() {
     if (!ambNodes) return;
     try { ambNodes.src.stop(); } catch (e) {}
@@ -148,14 +207,15 @@
     mute = !!b;
     if (master) master.gain.value = mute ? 0 : vol;
     try { if (g.localStorage) g.localStorage.setItem('plaza.mute', mute ? '1' : '0'); } catch (e) {}
-    if (mute) stopAmbient(); else startAmbient();
+    if (mute) { stopAmbient(); stopMusic(); } else { startAmbient(); }
   }
 
   function toggleMute() { setMute(!mute); return mute; }
   function isMute() { return mute; }
 
   function resetDiff() {
-    lastHp = [999, 999]; lastAtk = [null, null]; lastPhase = ''; lastCd = -1; lastGround = [true, true];
+    lastHp = [999, 999]; lastAtk = [null, null]; lastHitSeq = [0, 0]; lastPhase = ''; lastCd = -1; lastGround = [true, true];
+    stopMusic();
   }
 
   function fromSnap(snap) {
@@ -173,6 +233,12 @@
         sfx('ko');
         setTimeout(function () { sfx('win'); }, 400);
       }
+      if (snap.phase === 'kampf' && lastPhase !== 'kampf') startMusic(0.55);
+      if (snap.phase === 'ende') stopMusic();
+      if (snap.phase === 'kampf' && snap.p) {
+        var minHp = Math.min(snap.p[0].hp / (snap.p[0].maxHp || 100), snap.p[1].hp / (snap.p[1].maxHp || 100));
+        setMusicIntensity(0.45 + (1 - minHp) * 0.5);
+      }
       lastPhase = snap.phase;
 
       for (var i = 0; i < 2; i++) {
@@ -181,8 +247,16 @@
         var c = Plaza.Chars && Plaza.Chars.finde ? Plaza.Chars.finde(p.charId) : null;
         var pitch = (c && c.sound && c.sound.hitPitch) || 1;
 
-        // Hit
-        if (typeof lastHp[i] === 'number' && p.hp < lastHp[i]) {
+        // Hit via hitSeq (bevorzugt) oder HP-Diff
+        var seq = p.hitSeq | 0;
+        if (seq > (lastHitSeq[i] | 0)) {
+          var kind = p.hitKind || '';
+          if (kind === 'block') sfx('block', { pitch: pitch });
+          else if (kind === 'armor') sfx('armor', { pitch: pitch });
+          else if (kind === 'heavy' || kind === 'throw') { sfx('hitH', { pitch: pitch }); duckMusic(220); }
+          else sfx('hitL', { pitch: pitch });
+          lastHitSeq[i] = seq;
+        } else if (typeof lastHp[i] === 'number' && p.hp < lastHp[i]) {
           var d = lastHp[i] - p.hp;
           sfx(d >= 10 ? 'hitH' : 'hitL', { pitch: pitch });
         }
@@ -215,6 +289,10 @@
     fromSnap: fromSnap,
     resetDiff: resetDiff,
     startAmbient: startAmbient,
-    stopAmbient: stopAmbient
+    stopAmbient: stopAmbient,
+    startMusic: startMusic,
+    stopMusic: stopMusic,
+    setMusicIntensity: setMusicIntensity,
+    duckMusic: duckMusic
   };
 })(typeof window !== 'undefined' ? window : globalThis);
