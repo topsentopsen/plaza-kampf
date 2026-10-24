@@ -87,11 +87,16 @@
           break;
         case 'swingL': rausch(0.06, 0.12, 3000); ton('sine', 700 * pitch, 300 * pitch, 0.06, 0.1); break;
         case 'swingH': rausch(0.14, 0.18, 1200); ton('sawtooth', 300 * pitch, 90 * pitch, 0.14, 0.14); break;
-        case 'hitL': ton('square', 220 * pitch, 90 * pitch, 0.08, 0.16); rausch(0.02, 0.15, 4000); break;
+        case 'hitL':
+          ton('square', 240 * pitch, 80 * pitch, 0.07, 0.2);
+          ton('sine', 110 * pitch, 55 * pitch, 0.09, 0.14);
+          rausch(0.035, 0.18, 3500);
+          break;
         case 'hitH':
-          ton('square', 160 * pitch, 40 * pitch, 0.18, 0.2);
-          ton('sine', 70, 35, 0.2, 0.22);
-          rausch(0.1, 0.22, 800);
+          ton('square', 150 * pitch, 35 * pitch, 0.22, 0.24);
+          ton('sine', 65, 28, 0.28, 0.28);
+          ton('sawtooth', 90, 40, 0.12, 0.1);
+          rausch(0.14, 0.28, 600);
           break;
         case 'jump': ton('triangle', 300 * pitch, 600 * pitch, 0.08, 0.1); break;
         case 'land': ton('sine', 120, 60, 0.1, 0.14); rausch(0.05, 0.08, 600); break;
@@ -124,19 +129,24 @@
   function startAmbient() {
     if (!ensure() || mute || ambNodes) return;
     try {
-      // Zikaden-ähnliches gefiltertes Rauschen
+      // Höllen-Knistern: tiefes Rumble + High-Crackle
       var src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
-      var bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 4200; bp.Q.value = 8;
-      var g = ctx.createGain(); g.gain.value = 0.04;
-      src.connect(bp); bp.connect(g); g.connect(ambBus);
+      var lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 280; lp.Q.value = 0.7;
+      var g = ctx.createGain(); g.gain.value = 0.05;
+      src.connect(lp); lp.connect(g); g.connect(ambBus);
       src.start();
-      ambNodes = { src: src, g: g };
-      // gelegentliche Glocke
+      var src2 = ctx.createBufferSource(); src2.buffer = noiseBuf; src2.loop = true;
+      var bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2800; bp.Q.value = 4;
+      var g2 = ctx.createGain(); g2.gain.value = 0.025;
+      src2.connect(bp); bp.connect(g2); g2.connect(ambBus);
+      src2.start();
+      ambNodes = { src: src, src2: src2, g: g };
+      // ferner Vulkan-Groll
       ambNodes.bell = setInterval(function () {
         if (mute || !ctx) return;
-        ton('sine', 784, 784, 0.6, 0.04, ambBus);
-        ton('sine', 1175, 1175, 0.5, 0.03, ambBus);
-      }, 22000);
+        ton('sine', 55, 40, 0.8, 0.05, ambBus);
+        ton('triangle', 90, 60, 0.5, 0.03, ambBus);
+      }, 16000);
     } catch (e) {}
   }
 
@@ -150,7 +160,7 @@
       var t0 = ctx.currentTime;
       var g = ctx.createGain(); g.gain.value = 0.045 * intensity;
       g.connect(master);
-      var notes = [196, 233, 262, 311, 349, 392];
+      var notes = [165, 196, 220, 247, 294, 330]; // düsterer Moll/Phrygisch
       var oscs = [];
       function pulse() {
         if (!musicNodes || mute) return;
@@ -199,6 +209,7 @@
   function stopAmbient() {
     if (!ambNodes) return;
     try { ambNodes.src.stop(); } catch (e) {}
+    try { if (ambNodes.src2) ambNodes.src2.stop(); } catch (e2) {}
     if (ambNodes.bell) clearInterval(ambNodes.bell);
     ambNodes = null;
   }

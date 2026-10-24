@@ -1,4 +1,4 @@
-# Plaza-Kampf v0.4
+# Plaza-Kampf v0.5
 
 Dunkles Versus — *la Pelea del Infierno*. Feuer, Vulkane, ernste Street-Fighter-Chars. Statisches HTML/JS auf GitHub Pages.
 
@@ -45,3 +45,12 @@ Design-Plan: siehe Repo-Extern `/workspace/plaza-kampf-claude/design-v0.3-2026-1
 - Cache: hart neu laden mit `?v=0.4`
 
 Live: https://topsentopsen.github.io/plaza-kampf/
+
+
+## v0.5 „Politur“
+- Schärfere Auflösung: 2×/3× interner Canvas-Puffer + Integer-CSS-Scale (Retina)
+- Idle-Mikroanims, Win-Pose + Spruch, Combo-Anzeige
+- Mehr Hit-FX (Slash/Block/Armor/Ember), punchiger Sound, Höllen-Ambient
+- Arena: Asche-Partikel + Lava-Glow; Lobby-Schritte klarer
+- Feel: Block/Hitstun/Dash-Tuning
+- Cache: hart neu laden mit `?v=0.5`

@@ -1,4 +1,4 @@
-/* Autoritative Kampfsimulation (läuft auf dem Host). v0.4: Block, Duck, Luft-A, Armor/Hits/Dash. */
+/* Autoritative Kampfsimulation (läuft auf dem Host). v0.5: Feel/Balance, Combo-Reset. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -120,26 +120,29 @@
       return false;
     }
     if (istBlock(ang, opf, m)) {
-      var chip = Math.max(1, Math.ceil(m.dmg * 0.1));
+      var chip = Math.max(1, Math.ceil(m.dmg * 0.12));
       opf.hp = Math.max(0, opf.hp - chip);
-      opf.stun = 6;
-      opf.vx = ang.facing * m.knock * 0.4;
+      opf.stun = 4; // kürzer — Block fühlt sich reaktiv an
+      opf.vx = ang.facing * m.knock * 0.55;
       opf.blocking = true;
       opf.hitSeq++;
       opf.hitKind = 'block';
+      ang.combo = 0; // Block bricht Combo
       return true;
     }
     opf.hp = Math.max(0, opf.hp - m.dmg);
-    opf.stun = 12 + Math.floor(m.dmg / 2);
+    // Light: kürzerer Hitstun (Kombo-Fenster), Heavy: länger
+    opf.stun = m.dmg >= 14 ? (14 + Math.floor(m.dmg / 2)) : (8 + Math.floor(m.dmg / 3));
     opf.vx = ang.facing * m.knock;
-    opf.vy = m.throw ? -4 : -1.5;
+    opf.vy = m.throw ? -4.2 : (m.dmg >= 14 ? -2.2 : -1.2);
     opf.grounded = false;
     opf.atk = null;
     opf.blocking = false;
     opf.crouch = false;
-    opf.invuln = 8;
+    opf.invuln = m.dmg >= 14 ? 10 : 6;
     opf.hitSeq++;
-    opf.hitKind = m.dmg >= 14 ? 'heavy' : (m.throw ? 'throw' : 'light');
+    opf.hitKind = m.throw ? 'throw' : (m.dmg >= 14 ? 'heavy' : 'light');
+    opf.combo = 0; // Getroffen → eigene Combo weg
     ang.combo = (ang.combo || 0) + 1;
     if (m.throw) {
       opf.x = ang.x + ang.facing * 28;
@@ -276,6 +279,7 @@
         spawnProj(st, p, m);
       }
       if (p.atkFrame >= total) {
+        if (!p.hitDone && p.hitCount === 0) p.combo = 0; // Whiff bricht Combo
         p.atk = null;
         p._cancel = null;
       }

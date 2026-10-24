@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>Plaza-Kampf v0.4</title>
+<title>Plaza-Kampf v0.5</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230a0608'/%3E%3Ccircle cx='4' cy='11' r='3' fill='%238a1008'/%3E%3Ccircle cx='12' cy='11' r='3' fill='%23ff3a08'/%3E%3Cpath d='M6 4h4v3H6z' fill='%23ff6020'/%3E%3C/svg%3E">
 <style>
   html, body { margin: 0; height: 100%; background: #050208; overflow: hidden; touch-action: manipulation;
@@ -15,9 +15,10 @@
     padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
   #rahmen { position: relative; line-height: 0; margin-top: 8px;
     box-shadow: 0 0 0 4px #5a1810, 0 8px 40px rgba(0,0,0,.85); border-radius: 6px; background: #050208; }
-  canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges;
+  canvas { display: block; image-rendering: pixelated; image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges; -ms-interpolation-mode: nearest-neighbor;
     touch-action: none; -webkit-tap-highlight-color: transparent; width: 100%; height: 100%; }
-  #status { min-height: 1.2em; margin: 6px 12px 0; font-size: 13px; text-align: center; color: #ff6020; max-width: 96vw; }
+  #status { min-height: 1.2em; margin: 6px 12px 0; font-size: var(--ui, 14px); text-align: center; color: #ff6020; max-width: 96vw; }
   #overlay { position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center;
     pointer-events: none; z-index: 5; padding-bottom: env(safe-area-inset-bottom, 8px); }
   #overlay:not([hidden]) { pointer-events: auto; }
@@ -54,15 +55,17 @@
     padding: 8px 12px calc(10px + env(safe-area-inset-bottom, 0px)); pointer-events: none; }
   #controls[hidden] { display: none !important; }
   .pad, .actions { display: flex; gap: 10px; pointer-events: auto; }
-  .pad { flex-wrap: wrap; width: 140px; }
+  .pad { flex-wrap: wrap; width: calc(var(--pad, 60px) * 2.5); }
   .actions { flex-direction: column; }
-  .pad button, .actions button { width: 56px; height: 56px; border-radius: 50%; font-size: 18px; padding: 0;
+  .pad button, .actions button { width: var(--pad, 60px); height: var(--pad, 60px); border-radius: 50%;
+    font-size: calc(var(--pad, 60px) * 0.34); padding: 0;
     background: #1a1018; color: #e8c090; box-shadow: 0 0 0 3px #000, 0 4px 0 #3a1010; }
   .actions button[data-k="a"] { background: #5a1828; }
   .actions button[data-k="b"] { background: #8a3010; }
   .actions button[data-k="c"] { background: #6a2808; color: #ffb040; }
   .pad button.down, .actions button.down { transform: translateY(3px); box-shadow: 0 0 0 3px #ff3a08; }
   .hint { font-size: 12px; color: #8a6050; margin-top: 8px; }
+  .hint.steps { line-height: 1.45; color: #c09070; }
   #version { position: fixed; top: 6px; right: 10px; font-size: 11px; color: #ff6020; opacity: .85; z-index: 6; }
   #mute { position: fixed; top: 4px; left: 8px; z-index: 6; width: 40px; height: 40px; padding: 0;
     border-radius: 50%; font-size: 18px; background: #1a0a10; box-shadow: 0 2px 0 #000; color: #ff6020; }
@@ -70,14 +73,17 @@
 </head>
 <body>
 <button type="button" id="mute" data-act="mute" aria-label="Ton aus">🔊</button>
-<div id="version">Plaza-Kampf v0.4</div>
+<div id="version">Plaza-Kampf v0.5</div>
 <div id="rahmen"><canvas id="spiel" width="320" height="180"></canvas></div>
 <div id="status"></div>
 
 <div id="overlay">
   <div class="screen" data-screen="menue">
     <h1>Plaza-Kampf</h1>
-    <p>la Pelea del Infierno — dunkles Versus für zwei Handys. Ein Raum, ein Link.</p>
+    <p>la Pelea del Infierno — dunkles Versus für zwei Handys.</p>
+    <p class="hint steps"><strong>1.</strong> Host: Raum erstellen → Link teilen<br>
+    <strong>2.</strong> Gast: Link öffnen → <em>Jetzt beitreten</em><br>
+    <strong>3.</strong> Beide Charakter wählen — Kampf startet.</p>
     <div class="row">
       <button type="button" data-act="host">Raum erstellen</button>
       <button type="button" class="secondary" data-act="join">Beitreten</button>
@@ -85,7 +91,7 @@
     <div class="row">
       <input id="raum-input" type="text" placeholder="Raum-Code" autocomplete="off" autocapitalize="off" spellcheck="false">
     </div>
-    <p class="hint">v0.4: Höllen-Arena (Feuer/Vulkane), dunkle Street-Fighter-Chars, Block/Duck. Multiplayer wie v0.2. Hart neu laden (?v=0.4). Ton: Klingelschalter?</p>
+    <p class="hint">v0.5: Schärfere Auflösung (Retina), Idle/Hit-FX, Sound-Punch, Combo. Block=weg vom Gegner · Duck=▼. Hart neu laden (?v=0.5). Ton: Klingelschalter?</p>
   </div>
 
   <div class="screen" data-screen="warte" hidden>
@@ -97,12 +103,14 @@
       <button type="button" class="accent" data-act="join-now" hidden>Jetzt beitreten</button>
       <button type="button" data-act="retry" hidden>Nochmal</button>
     </div>
-    <p class="hint">Gast: Link öffnen, dann <strong>Jetzt beitreten</strong> tippen. Host teilt nur den Link ohne &amp;host=1.</p>
+    <p class="hint"><strong>Host:</strong> Code/Link teilen (ohne &amp;host=1).<br>
+    <strong>Gast:</strong> Link öffnen → unten <em>Jetzt beitreten</em> tippen.<br>
+    Beide Handys brauchen dieselbe Version (?v=0.5).</p>
   </div>
 
   <div class="screen" data-screen="wahl" hidden>
     <h1>Charakter wählen</h1>
-    <p>Tippe eine Karte — der Kampf startet, sobald beide gewählt haben.</p>
+    <p>Tippe eine Karte. Start, sobald beide gewählt haben. A=leicht · B=schwer · S=spezial · ▼=duck · weg=block.</p>
     <div class="chars"></div>
   </div>
 </div>
@@ -122,13 +130,13 @@
 
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="js/palette.js?v=0.4"></script>
-<script src="js/chars.js?v=0.4"></script>
-<script src="js/kampf.js?v=0.4"></script>
-<script src="js/netz.js?v=0.4"></script>
-<script src="js/sound.js?v=0.4"></script>
-<script src="js/render.js?v=0.4"></script>
-<script src="js/ui.js?v=0.4"></script>
-<script src="js/main.js?v=0.4"></script>
+<script src="js/palette.js?v=0.5"></script>
+<script src="js/chars.js?v=0.5"></script>
+<script src="js/kampf.js?v=0.5"></script>
+<script src="js/netz.js?v=0.5"></script>
+<script src="js/sound.js?v=0.5"></script>
+<script src="js/render.js?v=0.5"></script>
+<script src="js/ui.js?v=0.5"></script>
+<script src="js/main.js?v=0.5"></script>
 </body>
 </html>

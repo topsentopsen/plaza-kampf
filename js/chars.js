@@ -1,4 +1,4 @@
-/* Fünf Plaza-Kämpfer: Stats, Moves (v0.4 Felder), Lore, Look. */
+/* Fünf Plaza-Kämpfer: Stats, Moves, Lore, Look, winLine (v0.5). */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -13,6 +13,7 @@
       stats: { tempo: 3, kraft: 3, reich: 3 },
       look: { build: 'mittel', hut: 'muetze', bart: 'drei', prop: 'netz' },
       sound: { hitPitch: 1.0 },
+      winLine: 'Das Netz hält — du nicht.',
       moves: {
         light: { name: 'Knuff', dmg: 6, startup: 4, active: 3, recovery: 8, knock: 2.2, reach: 22, high: 14 },
         heavy: { name: 'Sonnenhieb', dmg: 14, startup: 9, active: 4, recovery: 14, knock: 4.5, reach: 26, high: 16, overhead: true },
@@ -30,10 +31,11 @@
       stats: { tempo: 5, kraft: 2, reich: 4 },
       look: { build: 'schlank', hut: 'dutt', bart: null, prop: 'rose' },
       sound: { hitPitch: 1.2 },
+      winLine: 'Die Rose blutet heiß.',
       moves: {
-        light: { name: 'Tipp', dmg: 5, startup: 3, active: 2, recovery: 6, knock: 1.8, reach: 20, high: 12 },
-        heavy: { name: 'Wirbeltritt', dmg: 12, startup: 7, active: 5, recovery: 12, knock: 3.8, reach: 28, high: 10,
-          hits: 2, dash: 18 },
+        light: { name: 'Tipp', dmg: 5, startup: 3, active: 2, recovery: 5, knock: 1.8, reach: 20, high: 12 },
+        heavy: { name: 'Wirbeltritt', dmg: 12, startup: 6, active: 5, recovery: 11, knock: 3.8, reach: 28, high: 10,
+          hits: 2, dash: 20 },
         special: { name: 'Rosenregen', dmg: 10, startup: 10, active: 8, recovery: 14, knock: 2.5, reach: 48, high: 20,
           projectile: true, proj: { typ: 'fächer', spd: 2.2, life: 42, angles: [-0.4, 0, 0.4] } },
         air: { name: 'Diagonal-Tritt', dmg: 8, startup: 4, active: 5, recovery: 10, knock: 3, reach: 22, high: 16, overhead: true }
@@ -48,11 +50,12 @@
       stats: { tempo: 1, kraft: 5, reich: 3 },
       look: { build: 'breit', hut: null, bart: 'schnurr', prop: 'hammer' },
       sound: { hitPitch: 0.8 },
+      winLine: 'Der Amboss schweigt. Du auch.',
       moves: {
         light: { name: 'Schlag', dmg: 8, startup: 5, active: 3, recovery: 10, knock: 2.8, reach: 24, high: 16 },
         heavy: { name: 'Amboss', dmg: 20, startup: 14, active: 4, recovery: 18, knock: 6.5, reach: 28, high: 18,
           armor: { von: 10, bis: 14, hits: 1 } },
-        special: { name: 'Erdstoß', dmg: 22, startup: 16, active: 6, recovery: 22, knock: 7, reach: 30, high: 12,
+        special: { name: 'Erdstoß', dmg: 22, startup: 15, active: 6, recovery: 20, knock: 7, reach: 30, high: 12,
           projectile: true, proj: { typ: 'bodenwelle', vx: 2.2, life: 28, dmg: 22, knock: 7 } },
         air: { name: 'Hammerfall', dmg: 12, startup: 8, active: 4, recovery: 14, knock: 4, reach: 20, high: 18, overhead: true }
       }
@@ -66,6 +69,7 @@
       stats: { tempo: 2, kraft: 4, reich: 2 },
       look: { build: 'kräftig', hut: null, bart: null, prop: 'brille' },
       sound: { hitPitch: 0.9 },
+      winLine: 'Raus. Die Tür bleibt zu.',
       moves: {
         light: { name: 'Greif', dmg: 7, startup: 5, active: 3, recovery: 9, knock: 2.4, reach: 21, high: 14 },
         heavy: { name: 'Schulter', dmg: 15, startup: 10, active: 4, recovery: 15, knock: 5, reach: 24, high: 16,
@@ -84,10 +88,11 @@
       stats: { tempo: 4, kraft: 2, reich: 5 },
       look: { build: 'schlank', hut: 'pony', bart: null, prop: 'kopfhörer' },
       sound: { hitPitch: 1.25 },
+      winLine: 'Zu langsam für den Funken.',
       moves: {
-        light: { name: 'Stich', dmg: 5, startup: 3, active: 3, recovery: 7, knock: 2, reach: 23, high: 13 },
-        heavy: { name: 'Blitzkick', dmg: 13, startup: 8, active: 4, recovery: 13, knock: 4, reach: 30, high: 14,
-          dash: 30, cancel: 'special' },
+        light: { name: 'Stich', dmg: 5, startup: 3, active: 3, recovery: 6, knock: 2, reach: 23, high: 13 },
+        heavy: { name: 'Blitzkick', dmg: 13, startup: 7, active: 4, recovery: 12, knock: 4, reach: 30, high: 14,
+          dash: 32, cancel: 'special' },
         special: { name: 'Sonnenball', dmg: 12, startup: 11, active: 10, recovery: 16, knock: 3.2, reach: 56, high: 16,
           projectile: true, proj: { typ: 'ball', vx: 3.4, life: 55, scale: 1 } },
         air: { name: 'Slide-Kick', dmg: 6, startup: 4, active: 5, recovery: 10, knock: 2.2, reach: 26, high: 10, low: true }

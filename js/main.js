@@ -1,8 +1,8 @@
-/* Einstieg, Spielschleife, Host/Client-Logik. v0.4 */
+/* Einstieg, Spielschleife, Host/Client-Logik. v0.5 */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION = 'v0.4';
+  var VERSION = 'v0.5';
   Plaza.VERSION = VERSION;
 
   function params() {
@@ -33,19 +33,41 @@
     var hostWahl = null, gastWahl = null;
     var pendingRaum = null;
 
+    var _skKey = '';
     function skalieren() {
-      var ww = window.innerWidth, wh = window.innerHeight;
-      var sf = Math.min(ww / Plaza.Render.W, (wh * 0.62) / Plaza.Render.H);
-      rahmen.style.width = Math.floor(Plaza.Render.W * sf) + 'px';
-      rahmen.style.height = Math.floor(Plaza.Render.H * sf) + 'px';
+      var ww = window.innerWidth - 12, wh = window.innerHeight;
+      var W = Plaza.Render.W, H = Plaza.Render.H;
+      var dpr = Math.min(window.devicePixelRatio || 1, 3);
+      var maxH = wh * 0.58;
+      var sfInt = Math.max(1, Math.floor(Math.min(ww / W, maxH / H)));
+      var cssW = W * sfInt, cssH = H * sfInt;
+      if (sfInt <= 1) {
+        var soft = Math.min(ww / W, maxH / H, 2.5);
+        cssW = Math.floor(W * soft);
+        cssH = Math.floor(H * soft);
+      } else if (ww > cssW + W * 0.45 && sfInt < 3) {
+        cssW = Math.floor(W * (sfInt + 0.5));
+        cssH = Math.floor(H * (sfInt + 0.5));
+      }
+      var buf = dpr >= 2.5 ? 3 : 2;
+      var key = cssW + 'x' + cssH + '@' + buf;
+      if (key === _skKey) return;
+      _skKey = key;
+      rahmen.style.width = cssW + 'px';
+      rahmen.style.height = cssH + 'px';
       canvas.style.width = '100%';
       canvas.style.height = '100%';
-      document.documentElement.style.setProperty('--s', String(sf));
+      if (Plaza.Render.setzePuffer) Plaza.Render.setzePuffer(render, buf);
+      document.documentElement.style.setProperty('--s', String(cssW / W));
+      var pad = Math.max(56, Math.min(76, Math.round(48 + (cssW / W) * 10)));
+      document.documentElement.style.setProperty('--pad', pad + 'px');
+      var hudFs = Math.max(13, Math.min(16, Math.round(12 + (cssW / W) * 1.5)));
+      document.documentElement.style.setProperty('--ui', hudFs + 'px');
     }
 
     function setUrl(raum, isHost) {
       try {
-        var q = '?raum=' + encodeURIComponent(raum || '') + '&v=0.4';
+        var q = '?raum=' + encodeURIComponent(raum || '') + '&v=0.5';
         if (isHost) q += '&host=1';
         history.replaceState(null, '', q);
       } catch (e) {}
@@ -194,7 +216,7 @@
         }
         if (msg.typ === 'wahl') {
           if (msg.ver && msg.ver !== VERSION) {
-            ui.setStatus('Andere Version (' + msg.ver + ') — bitte beide hart neu laden (?v=0.4)');
+            ui.setStatus('Andere Version (' + msg.ver + ') — bitte beide hart neu laden (?v=0.5)');
           }
           if (netz.istHost()) {
             if (msg.seite === 1) gastWahl = msg.charId;
@@ -294,7 +316,7 @@
         Plaza.Render.zeichne(render, letzterSnap, seite);
         acc = 0;
       } else if (mode === 'menue') {
-        Plaza.Render.menueHint(render, 'Versus · 2 Handys · v0.4');
+        Plaza.Render.menueHint(render, 'Versus · 2 Handys · v0.5');
         acc = 0;
       } else {
         Plaza.Render.menueHint(render, statusElText());

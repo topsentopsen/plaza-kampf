@@ -1,8 +1,10 @@
-/* Pixel-Canvas v0.4: Höllen-Arena, SF-Chars, dunkles HUD. */
+/* Pixel-Canvas v0.5: Idle-Anims, Hit-FX, Asche, Combo, Win-Pose. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
   var W = 320, H = 180;
+  var BUF = 2; // interne Puffer-Skala (2×/3× → schärfer auf Retina)
+  var bufCanvas = null;
   var SCHRIFT = 'ui-rounded, "SF Pro Rounded", "Arial Rounded MT Bold", "Trebuchet MS", system-ui, sans-serif';
   var layers = null;
   var fx = [];
@@ -24,12 +26,38 @@
     return c;
   }
 
-  function erstelle(canvas) {
-    var ctx = canvas.getContext('2d');
+  function applyBuf(ctx) {
     if ('imageSmoothingEnabled' in ctx) ctx.imageSmoothingEnabled = false;
-    canvas.width = W; canvas.height = H;
+    ctx.setTransform(BUF, 0, 0, BUF, 0, 0);
+  }
+
+  function setzePuffer(r, buf) {
+    buf = Math.max(1, Math.min(3, buf | 0));
+    if (!r || !r.canvas) return BUF;
+    if (buf === BUF && r.canvas.width === W * BUF) {
+      applyBuf(r.ctx);
+      return BUF;
+    }
+    BUF = buf;
+    r.canvas.width = W * BUF;
+    r.canvas.height = H * BUF;
+    r.ctx = r.canvas.getContext('2d');
+    applyBuf(r.ctx);
+    layers = backeLayers(); // neu backen (logische Koords, Transform skaliert)
+    r.w = W; r.h = H; r.buf = BUF;
+    return BUF;
+  }
+
+  function erstelle(canvas) {
+    bufCanvas = canvas;
+    var dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
+    BUF = dpr >= 2.5 ? 3 : 2;
+    var ctx = canvas.getContext('2d');
+    canvas.width = W * BUF;
+    canvas.height = H * BUF;
+    applyBuf(ctx);
     layers = backeLayers();
-    return { canvas: canvas, ctx: ctx, w: W, h: H };
+    return { canvas: canvas, ctx: ctx, w: W, h: H, buf: BUF };
   }
 
   function backeLayers() {
@@ -341,7 +369,27 @@
       var ex = 40 + ei * 55 + ((tick / 3 + ei * 9) % 7) - Math.round(camX);
       if (ey > 70) ctx.fillRect(ex, ey, 1, 1);
     }
+    // Asche-Partikel (fallen langsam, horizontal drift)
+    ctx.fillStyle = '#5a4038';
+    for (var ai = 0; ai < 12; ai++) {
+      var ay = ((tick * 0.4 + ai * 23) % 160);
+      var ax = (ai * 29 + ((tick / 8) | 0) * ((ai % 3) - 1) - Math.round(camX) + 400) % 360 - 20;
+      if ((ai + tick) % 3 === 0) ctx.fillStyle = '#3a2820';
+      else ctx.fillStyle = '#6a4840';
+      ctx.fillRect(ax, ay, 1, 1);
+    }
+    // Lava-Glow auf Boden-Medaillon (vor L4 als Overlay nach L4)
     drawLayer(ctx, layers.L4, 1.0, tick);
+    var pulse = 0.12 + 0.1 * Math.sin(tick / 14);
+    ctx.fillStyle = 'rgba(255,58,8,' + pulse.toFixed(3) + ')';
+    var mx = 160 - Math.round(camX);
+    ctx.beginPath();
+    ctx.arc(mx, 148, 18 + ((tick / 20) | 0) % 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,176,64,' + (pulse * 0.6).toFixed(3) + ')';
+    ctx.beginPath();
+    ctx.arc(mx, 148, 8, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   function fg(ctx, tick) {
@@ -376,6 +424,25 @@
     var f = p.facing || 1;
     var h = c.h, w = c.w;
     if (p.crouch) h = Math.floor(c.h * 0.62);
+    // Idle-Atem / Charakter-Mikro (nur stehend, kein atk/stun)
+    var idle = 0, idleX = 0;
+    if (!p.atk && p.stun <= 0 && p.grounded && !p.crouch && !p.blk) {
+      var it = (Date.now() / 140) | 0;
+      idle = (it + p.id * 3) % 2; // 1px Atem
+      y -= idle;
+      // Persönlichkeit
+      if (c.id === 'toni' && (it % 28) < 2) idleX = f; // Hammer-Klopf-Wippe
+      if (c.id === 'nina' && (it % 4) < 2) y -= 1; // Zehenspitzen-Hüpfer
+      if (c.id === 'lola') idleX = ((it % 6) < 3) ? f : 0; // Rock/Fächer
+      if (c.id === 'rocco' && (it % 20) < 3) h = c.h - 1; // Nacken
+      if (c.id === 'biel' && (it % 22) < 2) idleX = -f; // Netz pendelt
+      x += idleX;
+    }
+    // Win-Pose: Arme hoch / breiter Stand
+    if (p._winPose) {
+      h = c.h;
+      w = c.w + 2;
+    }
     if (blink && p.invuln > 0 && (p.invuln % 2 === 0)) return;
     if (flash[p.id] > 0) { /* white flash handled below */ }
 
@@ -513,6 +580,15 @@
       ctx.fillRect(f > 0 ? bx - 2 : bx + w + 1, by + 17, 2, 2);
     }
 
+        // Win-Pose Arms
+    if (p._winPose) {
+      ctx.fillStyle = c.accent || '#ff6020';
+      ctx.fillRect(bx - 4, by + 2, 4, 10);
+      ctx.fillRect(bx + w, by + 2, 4, 10);
+      ctx.fillStyle = '#ffb040';
+      ctx.fillRect(bx + w / 2 - 2, by - 8, 4, 4); // Funke/Pokal-Pixel
+    }
+
     // Augen
     ctx.fillStyle = p.stun > 0 ? '#5a2010' : '#ffb040';
     if (p.stun > 0) {
@@ -603,19 +679,37 @@
       for (var i = 0; i < 2; i++) {
         var a = prevSnap.p[i], b = snap.p[i];
         if (!a || !b) continue;
-        if (b.hp < a.hp) {
-          if (snap.p[i] && (snap.p[i].hitKind === 'heavy' || snap.p[i].hitKind === 'throw')) shake = 4;
-        flash[i] = 4;
-          spawnFx('spark', b.x, b.y - 16, Plaza.Chars.finde(b.charId).farbe);
-          if (a.hp - b.hp >= 10) spawnFx('spark', b.x + 4, b.y - 20, '#fff8ee');
+        var kind = b.hitKind || '';
+        var seqGrew = (b.hitSeq | 0) > (a.hitSeq | 0);
+        if (b.hp < a.hp || seqGrew) {
+          if (kind === 'heavy' || kind === 'throw') shake = 5;
+          else if (kind === 'block') shake = 1;
+          flash[i] = kind === 'armor' ? 6 : 4;
+          if (kind === 'block') {
+            spawnFx('block', b.x, b.y - 14, '#ffe080');
+          } else if (kind === 'armor') {
+            spawnFx('armor', b.x, b.y - 16, '#ffb040');
+          } else {
+            var col = Plaza.Chars.finde(b.charId).accent || '#ff3a08';
+            spawnFx('spark', b.x, b.y - 16, col);
+            spawnFx('spark', b.x + 5, b.y - 20, '#fff0c0');
+            spawnFx('ember', b.x - 3, b.y - 12, '#ff6020');
+            if (a.hp - b.hp >= 10 || kind === 'heavy') {
+              spawnFx('slash', b.x, b.y - 18, col);
+              spawnFx('spark', b.x - 4, b.y - 22, '#fff8ee');
+            }
+          }
         }
-        if (!a.grounded && b.grounded) spawnFx('dust', b.x, Plaza.Kampf.BODEN, '#c79f74');
-        if (a.grounded && !b.grounded) spawnFx('dust', b.x, Plaza.Kampf.BODEN, '#dcb98e');
+        if (!a.grounded && b.grounded) spawnFx('dust', b.x, Plaza.Kampf.BODEN, '#5a3020');
+        if (a.grounded && !b.grounded) spawnFx('dust', b.x, Plaza.Kampf.BODEN, '#3a2010');
+        // Track hitSeq in prev
+        a.hitSeq = b.hitSeq; a.hitKind = b.hitKind;
       }
     }
     prevSnap = {
       p: snap.p.map(function (p) {
-        return { hp: p.hp, grounded: p.grounded, x: p.x, y: p.y, charId: p.charId };
+        return { hp: p.hp, grounded: p.grounded, x: p.x, y: p.y, charId: p.charId,
+          hitSeq: p.hitSeq | 0, hitKind: p.hitKind || '' };
       })
     };
   }
@@ -625,13 +719,45 @@
       var e = fx[i];
       e.t++;
       if (e.kind === 'spark') {
-        var s = e.t < 2 ? 3 : e.t < 4 ? 7 : e.t < 6 ? 5 : 0;
+        var s = e.t < 2 ? 4 : e.t < 4 ? 8 : e.t < 7 ? 5 : 0;
         if (s <= 0) { fx.splice(i, 1); continue; }
         ctx.fillStyle = e.col;
         ctx.fillRect(e.x - 1, e.y - s, 2, s * 2);
         ctx.fillRect(e.x - s, e.y - 1, s * 2, 2);
         ctx.fillStyle = '#fff8ee';
         ctx.fillRect(e.x - 1, e.y - 1, 2, 2);
+      } else if (e.kind === 'slash') {
+        if (e.t > 6) { fx.splice(i, 1); continue; }
+        ctx.fillStyle = e.col;
+        ctx.globalAlpha = 1 - e.t / 6;
+        ctx.fillRect(e.x - 10 + e.t, e.y - 2, 14, 2);
+        ctx.fillRect(e.x - 8 + e.t, e.y - 5, 10, 1);
+        ctx.fillStyle = '#fff8ee';
+        ctx.fillRect(e.x - 6 + e.t, e.y - 1, 6, 1);
+        ctx.globalAlpha = 1;
+      } else if (e.kind === 'block') {
+        if (e.t > 7) { fx.splice(i, 1); continue; }
+        ctx.fillStyle = '#ffe080';
+        ctx.globalAlpha = 1 - e.t / 7;
+        ctx.fillRect(e.x - 6, e.y - 8, 12, 2);
+        ctx.fillRect(e.x - 7, e.y - 6, 2, 10);
+        ctx.fillRect(e.x + 5, e.y - 6, 2, 10);
+        ctx.fillStyle = '#fff8ee';
+        ctx.fillRect(e.x - 2, e.y - 4, 4, 4);
+        ctx.globalAlpha = 1;
+      } else if (e.kind === 'armor') {
+        if (e.t > 8) { fx.splice(i, 1); continue; }
+        ctx.fillStyle = '#ffb040';
+        ctx.globalAlpha = 0.7 - e.t / 12;
+        ctx.fillRect(e.x - 9, e.y - 12, 18, 2);
+        ctx.fillRect(e.x - 9, e.y + 6, 18, 2);
+        ctx.fillRect(e.x - 9, e.y - 12, 2, 20);
+        ctx.fillRect(e.x + 7, e.y - 12, 2, 20);
+        ctx.globalAlpha = 1;
+      } else if (e.kind === 'ember') {
+        if (e.t > 12) { fx.splice(i, 1); continue; }
+        ctx.fillStyle = e.t < 4 ? '#ffb040' : '#ff3a08';
+        ctx.fillRect(e.x + (e.t % 3) - 1, e.y - e.t, 1, 2);
       } else if (e.kind === 'dust') {
         if (e.t > 8) { fx.splice(i, 1); continue; }
         ctx.fillStyle = e.col;
@@ -724,15 +850,39 @@
       ctx.font = 'bold 48px ' + SCHRIFT;
       ctx.fillText(snap.countdown > 0 ? String(snap.countdown) : 'LOS!', W / 2, H / 2 + 8);
     }
+    // Combo-Anzeige
+    var ci, bestC = 0, bestId = -1;
+    for (ci = 0; ci < snap.p.length; ci++) {
+      if ((snap.p[ci].combo | 0) > bestC) { bestC = snap.p[ci].combo | 0; bestId = ci; }
+    }
+    if (bestC >= 2 && snap.phase === 'kampf') {
+      ctx.fillStyle = '#ff6020';
+      ctx.font = 'bold 14px ' + SCHRIFT;
+      ctx.textAlign = 'center';
+      ctx.fillText(bestC + ' HIT!', W / 2, 42);
+      ctx.fillStyle = '#ffe080';
+      ctx.font = '9px ' + SCHRIFT;
+      ctx.fillText(snap.p[bestId].name, W / 2, 52);
+    }
+
     if (snap.phase === 'ende') {
       ctx.fillStyle = 'rgba(0,0,0,0.72)';
       ctx.fillRect(0, 0, W, H);
       ctx.fillStyle = '#ff6020';
       ctx.font = 'bold 20px ' + SCHRIFT;
-      ctx.fillText(snap.nachricht || 'Ende', W / 2, H / 2 - 8);
+      ctx.textAlign = 'center';
+      ctx.fillText(snap.nachricht || 'Ende', W / 2, H / 2 - 14);
+      if (snap.sieger != null && snap.p[snap.sieger]) {
+        var wc = Plaza.Chars.finde(snap.p[snap.sieger].charId);
+        if (wc && wc.winLine) {
+          ctx.fillStyle = '#ffb040';
+          ctx.font = '10px ' + SCHRIFT;
+          ctx.fillText('„' + wc.winLine + '“', W / 2, H / 2 + 4);
+        }
+      }
       ctx.fillStyle = '#e8c090';
       ctx.font = '12px ' + SCHRIFT;
-      ctx.fillText('Rematch tippen', W / 2, H / 2 + 16);
+      ctx.fillText('Rematch tippen', W / 2, H / 2 + 22);
     }
     if (ich === 0 || ich === 1) {
       ctx.fillStyle = 'rgba(232,192,144,0.85)';
@@ -744,6 +894,7 @@
 
   function zeichne(r, snap, ich) {
     var ctx = r.ctx;
+    applyBuf(ctx);
     ctx.save();
     updateFxFromDiff(snap);
     if (Plaza.Sound && Plaza.Sound.fromSnap) Plaza.Sound.fromSnap(snap);
@@ -785,6 +936,7 @@
     // Spiegelmatch: gleiche charId → P2 invertieren
     var same = snap.p[0] && snap.p[1] && snap.p[0].charId === snap.p[1].charId;
     for (i = 0; i < snap.p.length; i++) {
+      snap.p[i]._winPose = (snap.phase === 'ende' && snap.sieger === snap.p[i].id);
       fig(ctx, snap.p[i], true, same && i === 1);
     }
     drawFx(ctx);
@@ -795,6 +947,7 @@
 
   function menueHint(r, text) {
     var ctx = r.ctx;
+    applyBuf(ctx);
     if (!layers) layers = backeLayers();
     // Zeige Arena auch im Menü
     camX = Math.sin(Date.now() / 3000) * 6;
@@ -821,6 +974,8 @@
   }
 
   Plaza.Render = {
-    W: W, H: H, erstelle: erstelle, zeichne: zeichne, menueHint: menueHint, resetFx: resetFx
+    W: W, H: H, puffer: function () { return BUF; },
+    erstelle: erstelle, setzePuffer: setzePuffer,
+    zeichne: zeichne, menueHint: menueHint, resetFx: resetFx
   };
 })(typeof window !== 'undefined' ? window : globalThis);
