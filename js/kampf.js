@@ -226,9 +226,12 @@
   function updateSpieler(st, p, dt) {
     var c = Plaza.Chars.finde(p.charId);
     var inp = p.input;
-    if (p.bufA > 0) p.bufA--;
-    if (p.bufB > 0) p.bufB--;
-    if (p.bufC > 0) p.bufC--;
+    // v2.1: Buffer während Stun einfrieren (Wakeup-Buffer)
+    if (p.stun <= 0) {
+      if (p.bufA > 0) p.bufA--;
+      if (p.bufB > 0) p.bufB--;
+      if (p.bufC > 0) p.bufC--;
+    }
     if (p.invuln > 0) p.invuln--;
     p.blocking = false;
 

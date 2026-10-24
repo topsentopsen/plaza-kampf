@@ -1,8 +1,8 @@
-/* Einstieg, Spielschleife, Host/Client-Logik. v2.0 — Solo/Testmodus. */
+/* Einstieg, Spielschleife, Host/Client-Logik. v2.1 — Solo/Testmodus. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION = 'v2.0';
+  var VERSION = 'v2.1';
   Plaza.VERSION = VERSION;
 
   function params() {
@@ -253,7 +253,7 @@
         mode = 'menue';
         ui.showScreen('menue');
         ui.setStatus('');
-        Plaza.Render.menueHint(render, 'Versus · Solo · v2.0');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v2.1');
       },
       onHost: function () {
         soloMode = false;
@@ -692,7 +692,7 @@
         }
         acc = 0;
       } else if (mode === 'menue') {
-        Plaza.Render.menueHint(render, 'Versus · Solo · v2.0');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v2.1');
         acc = 0;
       } else {
         Plaza.Render.menueHint(render, statusElText());
@@ -733,7 +733,7 @@
     document.addEventListener('webkitfullscreenchange', function () { updateFsButton(); _skKey = ''; skalieren(); });
     skalieren();
     if ('serviceWorker' in navigator) {
-      try { navigator.serviceWorker.register('sw.js?v=2.0'); } catch (eSw) {}
+      try { navigator.serviceWorker.register('sw.js?v=2.1'); } catch (eSw) {}
     }
     requestAnimationFrame(loop);
   }
