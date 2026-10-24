@@ -226,7 +226,7 @@
   function updateSpieler(st, p, dt) {
     var c = Plaza.Chars.finde(p.charId);
     var inp = p.input;
-    // v2.1: Buffer während Stun einfrieren (Wakeup-Buffer)
+    // v2.2: Buffer während Stun einfrieren (Wakeup-Buffer)
     if (p.stun <= 0) {
       if (p.bufA > 0) p.bufA--;
       if (p.bufB > 0) p.bufB--;

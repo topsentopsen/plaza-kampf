@@ -1,8 +1,8 @@
-/* Einstieg, Spielschleife, Host/Client-Logik. v2.1 — Solo/Testmodus. */
+/* Einstieg, Spielschleife, Host/Client-Logik. v2.2 — Solo/Testmodus. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION = 'v2.1';
+  var VERSION = 'v2.2';
   Plaza.VERSION = VERSION;
 
   function params() {
@@ -253,7 +253,7 @@
         mode = 'menue';
         ui.showScreen('menue');
         ui.setStatus('');
-        Plaza.Render.menueHint(render, 'Versus · Solo · v2.1');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v2.2');
       },
       onHost: function () {
         soloMode = false;
@@ -354,7 +354,7 @@
           ui.showScreen('kampf');
           broadcast();
         } else if (netz) {
-          netz.sende({ typ: 'rematch' });
+          netz.sende({ typ: 'rematch', ver: VERSION });
         }
       },
       onInput: function (inp) {
@@ -537,13 +537,20 @@
           }
         }
         if (msg.typ === 'rematch' && netz.istHost() && kampf) {
-          mode = 'kampf';
-          ui.showScreen('kampf');
-          kampf = Plaza.Kampf.rematch(kampf);
-          kampf.phase = 'countdown';
-          kampf.countdown = 3;
-          kampf.tick = 0;
-          broadcast();
+          // v2.2: nur aus Endphase, Version prüfen, Doppel-Rematch ignorieren
+          if (kampf.phase !== 'ende' && mode !== 'ende') {
+            /* ignore mid-fight rematch spam */
+          } else if (msg.ver && msg.ver !== VERSION) {
+            ui.setStatus('Rematch abgelehnt — andere Version (' + msg.ver + ')');
+          } else {
+            mode = 'kampf';
+            ui.showScreen('kampf');
+            kampf = Plaza.Kampf.rematch(kampf);
+            kampf.phase = 'countdown';
+            kampf.countdown = 3;
+            kampf.tick = 0;
+            broadcast();
+          }
         }
       },
       onClose: function () {
@@ -597,7 +604,7 @@
           kampf.countdown = 3;
           kampf.tick = 0;
           broadcast();
-        } else if (netz) netz.sende({ typ: 'rematch' });
+        } else if (netz) netz.sende({ typ: 'rematch', ver: VERSION });
       }
     });
 
@@ -692,7 +699,7 @@
         }
         acc = 0;
       } else if (mode === 'menue') {
-        Plaza.Render.menueHint(render, 'Versus · Solo · v2.1');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v2.2');
         acc = 0;
       } else {
         Plaza.Render.menueHint(render, statusElText());
@@ -733,7 +740,7 @@
     document.addEventListener('webkitfullscreenchange', function () { updateFsButton(); _skKey = ''; skalieren(); });
     skalieren();
     if ('serviceWorker' in navigator) {
-      try { navigator.serviceWorker.register('sw.js?v=2.1'); } catch (eSw) {}
+      try { navigator.serviceWorker.register('sw.js?v=2.2'); } catch (eSw) {}
     }
     requestAnimationFrame(loop);
   }

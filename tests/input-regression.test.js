@@ -1,4 +1,4 @@
-/* v2.1: Input-Buffer, Cancel, Duck/Block-Regressionen */
+/* v2.2: Input-Buffer, Cancel, Duck/Block-Regressionen */
 var assert = require('assert');
 var path = require('path');
 var fs = require('fs');
