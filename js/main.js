@@ -1,8 +1,8 @@
-/* Einstieg, Spielschleife, Host/Client-Logik. */
+/* Einstieg, Spielschleife, Host/Client-Logik. v0.2 */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION = 'v0.1';
+  var VERSION = 'v0.2';
   Plaza.VERSION = VERSION;
 
   function params() {
@@ -11,7 +11,7 @@
       var s = location.search.replace(/^\?/, '').split('&');
       for (var i = 0; i < s.length; i++) {
         var p = s[i].split('=');
-        if (p[0]) q[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || '');
+        if (p[0]) q[decodeURIComponent(p[0])] = decodeURIComponent((p[1] || '').replace(/\+/g, ' '));
       }
     } catch (e) {}
     return q;
@@ -23,19 +23,18 @@
     var render = Plaza.Render.erstelle(canvas);
     var meinChar = 'biel';
     var peerChar = null;
-    var seite = 0; // 0 = host
+    var seite = 0;
     var kampf = null;
     var letzterSnap = null;
     var netz = null;
     var lokalInput = { l: false, r: false, u: false, d: false, a: false, b: false, c: false };
     var peerInput = { l: false, r: false, u: false, d: false, a: false, b: false, c: false };
-    var mode = 'menue'; // menue | warte | wahl | kampf
+    var mode = 'menue';
     var hostWahl = null, gastWahl = null;
+    var pendingRaum = null;
 
     function skalieren() {
       var ww = window.innerWidth, wh = window.innerHeight;
-      var s = Math.max(1, Math.floor(Math.min(ww / Plaza.Render.W, wh / Plaza.Render.H)));
-      // feiner skalieren für Handys
       var sf = Math.min(ww / Plaza.Render.W, (wh * 0.62) / Plaza.Render.H);
       rahmen.style.width = Math.floor(Plaza.Render.W * sf) + 'px';
       rahmen.style.height = Math.floor(Plaza.Render.H * sf) + 'px';
@@ -44,24 +43,42 @@
       document.documentElement.style.setProperty('--s', String(sf));
     }
 
+    function setUrl(raum, isHost) {
+      try {
+        var q = '?raum=' + encodeURIComponent(raum || '') + '&v=0.2';
+        if (isHost) q += '&host=1';
+        history.replaceState(null, '', q);
+      } catch (e) {}
+    }
+
     var ui = Plaza.UI.erstelle({
       root: document.body,
-      getLink: function () { return netz ? netz.linkFuer() : ''; },
+      getLink: function () { return netz ? netz.linkFuer(null, false) : ''; },
       onHost: function () {
         seite = 0;
         netz.hostStarten();
         ui.showScreen('warte');
-        ui.setStatus('Raum wird erstellt…');
+        ui.setStatus('Broker wird verbunden…');
+        ui.showRetry(false);
       },
       onJoin: function (raum) {
-        if (!raum) {
+        var code = (raum || pendingRaum || '').trim();
+        if (!code) {
           ui.setStatus('Bitte Raum-Code eingeben');
           return;
         }
         seite = 1;
-        netz.beitreten(raum);
+        pendingRaum = code;
+        netz.beitreten(code);
         ui.showScreen('warte');
-        ui.setStatus('Verbinde mit ' + raum + '…');
+        ui.setStatus('Trete Raum ' + code + ' bei…');
+        ui.showRetry(false);
+      },
+      onRetry: function () {
+        ui.setStatus('Nochmal…');
+        ui.showRetry(false);
+        if (netz) netz.retry();
+        ui.showScreen('warte');
       },
       onWahl: function (id) {
         meinChar = id;
@@ -115,46 +132,57 @@
 
     netz = Plaza.Netz.erstelle({
       onStatus: function (t, extra) {
+        extra = extra || {};
+        var via = extra.via || extra.transport || '';
         if (t === 'warte') {
-          var link = netz.linkFuer();
+          var link = netz.linkFuer(null, false);
           ui.showLink(link, netz.getRaum());
-          ui.setStatus('Raum ' + netz.getRaum() + ' — Link teilen!');
-          // URL aktualisieren
-          try {
-            history.replaceState(null, '', '?raum=' + encodeURIComponent(netz.getRaum()) + '&v=0.1');
-          } catch (e) {}
+          setUrl(netz.getRaum(), true);
+          ui.setStatus('Raum ' + netz.getRaum() + ' offen' + (via ? ' (' + via + ')' : '') + ' — Link teilen. Handy nicht sperren!');
+          ui.showRetry(false);
         } else if (t === 'verbunden') {
-          ui.setStatus('Verbunden! Tippe deinen Charakter');
+          ui.setStatus('Verbunden' + (via || netz.getTransport() ? ' über ' + (via || netz.getTransport()) : '') + '! Tippe deinen Charakter');
           hostWahl = null;
           gastWahl = null;
           ui.fillChars(null);
           ui.showScreen('wahl');
           mode = 'wahl';
+          ui.showRetry(false);
           netz.sende({ typ: 'join', seite: seite });
         } else if (t === 'fehler') {
-          var err = (extra && extra.err) || '';
-          var hinweis = 'Verbindung fehlgeschlagen (' + err + '). ';
-          if (err === 'peer-unavailable' || err === 'network' || err === 'server-error') {
-            hinweis += 'Strenges NAT oder Broker blockiert? Beide im gleichen WLAN versuchen oder später erneut.';
-          }
-          ui.setStatus(hinweis);
-          ui.showScreen('menue');
-        } else if (t === 'kein-peerjs') {
-          ui.setStatus('PeerJS konnte nicht geladen werden. Bitte neu laden.');
+          var err = extra.err || '';
+          var hinweis = extra.hinweis || '';
+          ui.setStatus('Problem: ' + err + (hinweis ? ' — ' + hinweis : '') + ' Statuszeile beobachten, dann „Nochmal“.');
+          ui.showRetry(true);
+          if (mode !== 'kampf') ui.showScreen('warte');
+        } else if (t === 'kein-peerjs' || t === 'mqtt-fehlt') {
+          ui.setStatus('Netz-Bibliothek fehlt. Bitte hart neu laden.');
+          ui.showRetry(true);
         } else if (t === 'getrennt') {
-          ui.setStatus('Gegenüber getrennt.');
-          if (mode === 'kampf') {
-            mode = 'menue';
-            ui.showScreen('menue');
-          }
-        } else if (t === 'verbinde' || t === 'suche') {
-          ui.setStatus(t === 'suche' ? 'Suche Host…' : 'Verbinde…');
+          ui.setStatus('Gegenüber weg. Tab offen lassen und „Nochmal“.');
+          ui.showRetry(true);
+        } else if (t === 'verbinde') {
+          ui.setStatus('Verbinde' + (via ? ' über ' + via : '') + '…');
+        } else if (t === 'suche') {
+          ui.setStatus('Suche Host…' + (extra.try ? ' Versuch ' + extra.try : ''));
+        } else if (t === 'broker-wechsel') {
+          ui.setStatus('Anderer Broker…');
+        } else if (t === 'mqtt-aus') {
+          ui.setStatus('MQTT nicht erreichbar — PeerJS-Fallback…');
+        } else if (t === 'neuer-code') {
+          ui.showLink(netz.linkFuer(null, false), netz.getRaum());
+          setUrl(netz.getRaum(), true);
+          ui.setStatus('Neuer Code: ' + netz.getRaum());
+        } else if (t === 'warte-peer') {
+          ui.setStatus(extra.hinweis || 'Warte auf Mitspieler…');
+        } else if (t === 'broker-weg') {
+          ui.setStatus('Broker kurz weg — reconnect…');
         }
       },
       onMsg: function (msg) {
         if (!msg || !msg.typ) return;
-        if (msg.typ === 'join' && netz.istHost()) {
-          ui.setStatus('Gast da — Charakter wählen');
+        if (msg.typ === 'hello' || msg.typ === 'join') {
+          if (netz.istHost()) ui.setStatus('Mitspieler da — Charakter wählen');
         }
         if (msg.typ === 'wahl') {
           if (netz.istHost()) {
@@ -182,28 +210,31 @@
           kampf.tick = 0;
           broadcast();
         }
-        if (msg.typ === 'wahl' && netz.istHost() && msg.seite === 0) {
-          /* ignore self */
-        }
       },
       onClose: function () {
         ui.setStatus('Verbindung zu.');
+        ui.showRetry(true);
       }
     });
 
-    // Auto-Join aus URL
     var q = params();
-    if (q.raum) {
-      seite = 1;
+    if (q.raum && (q.host === '1' || q.host === 'true')) {
+      seite = 0;
       ui.showScreen('warte');
-      // PeerJS braucht ggf. einen Tick
-      setTimeout(function () { netz.beitreten(q.raum); }, 80);
+      ui.setStatus('Host-Raum ' + q.raum + ' wird geöffnet…');
+      setTimeout(function () { netz.hostStarten(q.raum); }, 60);
+    } else if (q.raum) {
+      seite = 1;
+      pendingRaum = q.raum;
+      ui.showScreen('warte');
+      ui.showLink('', q.raum);
+      ui.setStatus('Raum ' + q.raum + ' — tippe „Jetzt beitreten“ (wichtig auf dem iPhone).');
+      ui.showJoinConfirm(true, q.raum);
     } else {
       ui.showScreen('menue');
       Plaza.Render.menueHint(render, 'Raum erstellen oder beitreten');
     }
 
-    // Rematch-Tap auf Canvas
     canvas.addEventListener('pointerdown', function () {
       if (letzterSnap && letzterSnap.phase === 'ende') {
         if (netz && netz.istHost() && kampf) {
@@ -213,6 +244,13 @@
           kampf.tick = 0;
           broadcast();
         } else if (netz) netz.sende({ typ: 'rematch' });
+      }
+    });
+
+    // Warnung wenn Tab in Hintergrund
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden && (mode === 'warte' || mode === 'wahl' || mode === 'kampf')) {
+        ui.setStatus('Tab im Hintergrund — Verbindung kann reißen. Bitte offen lassen!');
       }
     });
 
@@ -240,10 +278,10 @@
         Plaza.Render.zeichne(render, letzterSnap, seite);
         acc = 0;
       } else if (mode === 'menue') {
-        Plaza.Render.menueHint(render, 'Versus · 2 Handys · PeerJS');
+        Plaza.Render.menueHint(render, 'Versus · 2 Handys · v0.2');
         acc = 0;
       } else {
-        Plaza.Render.menueHint(render, ui && statusElText());
+        Plaza.Render.menueHint(render, statusElText());
         acc = 0;
       }
     }
@@ -256,7 +294,6 @@
     window.addEventListener('resize', skalieren);
     skalieren();
     requestAnimationFrame(loop);
-
   }
 
   if (document.readyState === 'loading') {

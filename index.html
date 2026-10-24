@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>Plaza-Kampf v0.1</title>
+<title>Plaza-Kampf v0.2</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%23b9a3f5'/%3E%3Ccircle cx='4' cy='10' r='3' fill='%235ec8b8'/%3E%3Ccircle cx='12' cy='10' r='3' fill='%23ff8a4d'/%3E%3Cpath d='M7 6h2v2H7z' fill='%23ffd36e'/%3E%3C/svg%3E">
 <style>
   html, body { margin: 0; height: 100%; background: #3a2e48; overflow: hidden; touch-action: manipulation;
@@ -22,7 +22,7 @@
     pointer-events: none; z-index: 5; padding-bottom: env(safe-area-inset-bottom, 8px); }
   #overlay:not([hidden]) { pointer-events: auto; }
   .screen { width: min(420px, 96vw); background: #fff8ee; color: #4a3560; border-radius: 16px 16px 0 0;
-    padding: 16px 16px 20px; box-shadow: 0 -8px 30px rgba(0,0,0,.35); max-height: 70vh; overflow: auto; }
+    padding: 16px 16px 20px; box-shadow: 0 -8px 30px rgba(0,0,0,.35); max-height: 72vh; overflow: auto; }
   .screen[hidden] { display: none !important; }
   .screen h1 { margin: 0 0 4px; font-size: 22px; }
   .screen p { margin: 0 0 12px; font-size: 14px; color: #8a74a8; }
@@ -33,6 +33,7 @@
   button.secondary { background: #b9a3f5; box-shadow: 0 3px 0 #9580dc; }
   button.accent { background: #ff8a4d; box-shadow: 0 3px 0 #e06a2a; }
   button:active { transform: translateY(2px); box-shadow: none; }
+  button[hidden] { display: none !important; }
   input[type=text] { flex: 1; min-width: 120px; border: 2px solid #b9a3f5; border-radius: 12px;
     padding: 12px; font: inherit; color: #4a3560; background: #fff; }
   .chars { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -57,11 +58,11 @@
   .actions button[data-k="c"] { background: #ffd36e; }
   .pad button.down, .actions button.down { transform: translateY(3px); box-shadow: 0 0 0 3px #4a3560; }
   .hint { font-size: 12px; color: #8a74a8; margin-top: 8px; }
-  #version { position: fixed; top: 6px; right: 10px; font-size: 11px; color: #b9a3f5; opacity: .8; }
+  #version { position: fixed; top: 6px; right: 10px; font-size: 11px; color: #b9a3f5; opacity: .8; z-index: 6; }
 </style>
 </head>
 <body>
-<div id="version">Plaza-Kampf v0.1</div>
+<div id="version">Plaza-Kampf v0.2</div>
 <div id="rahmen"><canvas id="spiel" width="320" height="180"></canvas></div>
 <div id="status"></div>
 
@@ -74,9 +75,9 @@
       <button type="button" class="secondary" data-act="join">Beitreten</button>
     </div>
     <div class="row">
-      <input id="raum-input" type="text" placeholder="Raum-Code" autocomplete="off" autocapitalize="off">
+      <input id="raum-input" type="text" placeholder="Raum-Code" autocomplete="off" autocapitalize="off" spellcheck="false">
     </div>
-    <p class="hint">Jeder spielt auf dem eigenen Handy. Host teilt den Link. Kein Passwort, Peer-zu-Peer über PeerJS.</p>
+    <p class="hint">v0.2: Verbindung über öffentlichen MQTT-Broker (Fallback PeerJS+TURN). Beide Handys: Tab offen lassen, nicht sperren. Statuszeile beobachten.</p>
   </div>
 
   <div class="screen" data-screen="warte" hidden>
@@ -85,8 +86,10 @@
     <div id="raum-link"></div>
     <div class="row" style="margin-top:10px">
       <button type="button" class="secondary" data-act="copy">Link kopieren</button>
+      <button type="button" class="accent" data-act="join-now" hidden>Jetzt beitreten</button>
+      <button type="button" data-act="retry" hidden>Nochmal</button>
     </div>
-    <p class="hint">Zweites Handy: Link öffnen oder Code unter „Beitreten“ eingeben. Wenn es hängt: gleiches WLAN oder erneut versuchen (strenges NAT).</p>
+    <p class="hint">Gast: Link öffnen, dann <strong>Jetzt beitreten</strong> tippen. Host teilt nur den Link ohne &amp;host=1. Bei Fehler: Nochmal.</p>
   </div>
 
   <div class="screen" data-screen="wahl" hidden>
@@ -109,12 +112,13 @@
   </div>
 </div>
 
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="js/chars.js?v=0.1"></script>
-<script src="js/kampf.js?v=0.1"></script>
-<script src="js/netz.js?v=0.1"></script>
-<script src="js/render.js?v=0.1"></script>
-<script src="js/ui.js?v=0.1"></script>
-<script src="js/main.js?v=0.1"></script>
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="js/chars.js?v=0.2"></script>
+<script src="js/kampf.js?v=0.2"></script>
+<script src="js/netz.js?v=0.2"></script>
+<script src="js/render.js?v=0.2"></script>
+<script src="js/ui.js?v=0.2"></script>
+<script src="js/main.js?v=0.2"></script>
 </body>
 </html>

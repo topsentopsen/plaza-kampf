@@ -11,6 +11,7 @@
     var onWahl = opts.onWahl || function () {};
     var onRematch = opts.onRematch || function () {};
     var onInput = opts.onInput || function () {};
+    var onRetry = opts.onRetry || function () {};
     var getLink = opts.getLink || function () { return ''; };
 
     var overlay = root.querySelector('#overlay');
@@ -129,6 +130,13 @@
         } else setStatus(link);
       });
       if (rematchBtn) rematchBtn.addEventListener('click', function () { onRematch(); });
+      var retryBtn = overlay.querySelector('[data-act="retry"]');
+      if (retryBtn) retryBtn.addEventListener('click', function () { onRetry(); });
+      var joinNow = overlay.querySelector('[data-act="join-now"]');
+      if (joinNow) joinNow.addEventListener('click', function () {
+        var codeEl = overlay.querySelector('#raum-code');
+        onJoin((codeEl && codeEl.textContent || '').trim());
+      });
     }
 
     function showLink(link, raum) {
@@ -142,11 +150,26 @@
     bindKeys();
     bindMenue();
 
+    function showRetry(on) {
+      var b = overlay.querySelector('[data-act="retry"]');
+      if (b) b.hidden = !on;
+    }
+    function showJoinConfirm(on, code) {
+      var b = overlay.querySelector('[data-act="join-now"]');
+      if (b) b.hidden = !on;
+      if (code) {
+        var c = overlay.querySelector('#raum-code');
+        if (c) c.textContent = code;
+      }
+    }
+
     return {
       showScreen: showScreen,
       fillChars: fillChars,
       setStatus: setStatus,
       showLink: showLink,
+      showRetry: showRetry,
+      showJoinConfirm: showJoinConfirm,
       getInput: function () { return input; },
       resetInput: function () {
         input = { l: false, r: false, u: false, d: false, a: false, b: false, c: false };
