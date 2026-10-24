@@ -1,4 +1,4 @@
-/* Fünf Plaza-Kämpfer: Stats, Moves, Lore, Look, winLine (v0.9). */
+/* Fünf Plaza-Kämpfer: Stats, Moves, Lore, Look, winLine (v1.0). */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -15,7 +15,7 @@
       sound: { hitPitch: 1.0 },
       winLine: 'Das Netz hält — du nicht.',
       moves: {
-        light: { name: 'Knuff', dmg: 6, startup: 4, active: 3, recovery: 8, knock: 2.2, reach: 22, high: 14 },
+        light: { name: 'Knuff', dmg: 6, startup: 4, active: 3, recovery: 8, knock: 2.2, reach: 22, high: 14, cancel: 'special' },
         heavy: { name: 'Sonnenhieb', dmg: 14, startup: 9, active: 4, recovery: 14, knock: 4.5, reach: 26, high: 16, overhead: true },
         special: { name: 'Pa amb oli', dmg: 18, startup: 12, active: 5, recovery: 18, knock: 5.5, reach: 34, high: 18,
           armor: { von: 1, bis: 10, hits: 1 } },
@@ -33,7 +33,7 @@
       sound: { hitPitch: 1.2 },
       winLine: 'Die Rose blutet heiß.',
       moves: {
-        light: { name: 'Tipp', dmg: 5, startup: 3, active: 2, recovery: 4, knock: 1.8, reach: 20, high: 12 },
+        light: { name: 'Tipp', dmg: 5, startup: 3, active: 2, recovery: 4, knock: 1.8, reach: 20, high: 12, cancel: 'special' },
         heavy: { name: 'Wirbeltritt', dmg: 12, startup: 6, active: 5, recovery: 11, knock: 3.8, reach: 28, high: 10,
           hits: 2, dash: 20 },
         special: { name: 'Rosenregen', dmg: 10, startup: 10, active: 8, recovery: 14, knock: 2.5, reach: 48, high: 20,
@@ -52,7 +52,7 @@
       sound: { hitPitch: 0.8 },
       winLine: 'Der Amboss schweigt. Du auch.',
       moves: {
-        light: { name: 'Schlag', dmg: 8, startup: 5, active: 3, recovery: 10, knock: 2.8, reach: 24, high: 16 },
+        light: { name: 'Schlag', dmg: 8, startup: 5, active: 3, recovery: 10, knock: 2.8, reach: 24, high: 16, cancel: 'special' },
         heavy: { name: 'Amboss', dmg: 20, startup: 14, active: 4, recovery: 18, knock: 6.5, reach: 28, high: 18,
           armor: { von: 10, bis: 14, hits: 1 } },
         special: { name: 'Erdstoß', dmg: 20, startup: 15, active: 6, recovery: 22, knock: 6.5, reach: 30, high: 12,
@@ -71,7 +71,7 @@
       sound: { hitPitch: 0.9 },
       winLine: 'Raus. Die Tür bleibt zu.',
       moves: {
-        light: { name: 'Greif', dmg: 7, startup: 5, active: 3, recovery: 9, knock: 2.4, reach: 21, high: 14 },
+        light: { name: 'Greif', dmg: 7, startup: 5, active: 3, recovery: 9, knock: 2.4, reach: 21, high: 14, cancel: 'special' },
         heavy: { name: 'Schulter', dmg: 15, startup: 10, active: 4, recovery: 15, knock: 5, reach: 24, high: 16,
           dash: 24, armor: { von: 8, bis: 14, hits: 1, proj: true } },
         special: { name: 'Plaza-Wurf', dmg: 16, startup: 8, active: 4, recovery: 16, knock: 8, reach: 20, high: 18,
@@ -90,7 +90,7 @@
       sound: { hitPitch: 1.25 },
       winLine: 'Zu langsam für den Funken.',
       moves: {
-        light: { name: 'Stich', dmg: 5, startup: 3, active: 3, recovery: 6, knock: 2, reach: 23, high: 13 },
+        light: { name: 'Stich', dmg: 5, startup: 3, active: 3, recovery: 6, knock: 2, reach: 23, high: 13, cancel: 'special' },
         heavy: { name: 'Blitzkick', dmg: 13, startup: 7, active: 4, recovery: 12, knock: 4, reach: 30, high: 14,
           dash: 32, cancel: 'special' },
         special: { name: 'Sonnenball', dmg: 13, startup: 10, active: 10, recovery: 15, knock: 3.4, reach: 56, high: 16,

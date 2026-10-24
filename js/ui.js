@@ -1,4 +1,4 @@
-/* Menü, Charakterwahl, Touch-Steuerung. v0.9 */
+/* Menü, Charakterwahl, Touch-Steuerung. v1.0 */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -62,12 +62,17 @@
           for (var i = 1; i <= 5; i++) s += '<i class="' + (i <= n ? 'an' : '') + '"></i>';
           return s;
         }
+        var ml = c.moves.light, mh = c.moves.heavy, ms = c.moves.special;
         b.innerHTML = '<span class="swatch" style="background:' + c.farbe + '"></span>' +
           '<strong>' + c.name + '</strong>' +
           '<em class="spitz">' + (c.spitzname || '') + '</em>' +
           '<small class="lore">' + (c.lore || '') + '</small>' +
           '<span class="pips" title="Tempo">' + pips(st.tempo) + '</span>' +
-          '<small>' + c.moves.light.name + ' · ' + c.moves.heavy.name + ' · ' + c.moves.special.name + '</small>';
+          '<small class="moves">' +
+            '<b>A</b> ' + ml.name + ' (' + ml.dmg + ') · ' +
+            '<b>B</b> ' + mh.name + ' (' + mh.dmg + ') · ' +
+            '<b>C</b> ' + ms.name + ' (' + ms.dmg + ')' +
+          '</small>';
         if (selId === c.id) b.classList.add('aktiv');
         b.addEventListener('click', function () {
           var alle = box.querySelectorAll('.char-card');

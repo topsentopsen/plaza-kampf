@@ -1,4 +1,4 @@
-/* Autoritative Kampfsimulation (läuft auf dem Host). v0.7: Spielernamen. */
+/* Autoritative Kampfsimulation (läuft auf dem Host). v1.0: Input-Buffer, Combo-Dmg. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -15,6 +15,7 @@
       hp: c.hp, maxHp: c.hp,
       stun: 0, crouch: false, blocking: false,
       atk: null, atkFrame: 0, hitDone: false, hitCount: 0,
+      bufA: 0, bufB: 0, bufC: 0, comboDmg: 0,
       invuln: 0, combo: 0, armorLeft: 0,
       hitSeq: 0, hitKind: '',
       input: { l: false, r: false, u: false, d: false, a: false, b: false, c: false },
@@ -51,6 +52,9 @@
       l: !!inp.l, r: !!inp.r, u: !!inp.u, d: !!inp.d,
       a: !!inp.a, b: !!inp.b, c: !!inp.c
     };
+    if (p.input.a && !p.prev.a) p.bufA = 5;
+    if (p.input.b && !p.prev.b) p.bufB = 5;
+    if (p.input.c && !p.prev.c) p.bufC = 5;
   }
 
   function moveArt(p, taste) {
@@ -140,6 +144,7 @@
       opf.hitSeq++;
       opf.hitKind = 'block';
       ang.combo = 0; // Block bricht Combo
+      ang.comboDmg = 0;
       return true;
     }
     opf.hp = Math.max(0, opf.hp - m.dmg);
@@ -156,6 +161,7 @@
     opf.hitKind = m.throw ? 'throw' : ((ang.atk && ang.atk.art === 'special') ? 'special' : (m.dmg >= 14 ? 'heavy' : 'light'));
     opf.combo = 0; // Getroffen → eigene Combo weg
     ang.combo = (ang.combo || 0) + 1;
+    ang.comboDmg = (ang.comboDmg || 0) + m.dmg;
     if (m.throw) {
       opf.x = ang.x + ang.facing * 28;
       opf.y = BODEN - 10;
@@ -220,6 +226,9 @@
   function updateSpieler(st, p, dt) {
     var c = Plaza.Chars.finde(p.charId);
     var inp = p.input;
+    if (p.bufA > 0) p.bufA--;
+    if (p.bufB > 0) p.bufB--;
+    if (p.bufC > 0) p.bufC--;
     if (p.invuln > 0) p.invuln--;
     p.blocking = false;
 
@@ -258,13 +267,13 @@
         p.vy = -c.jump;
         p.grounded = false;
       }
-      // Cancel aus vorherigem Treffer
-      if (p._cancel && inp.c && !p.prev.c) {
-        p._cancel = null;
+      // Cancel / Attacken mit Input-Buffer
+      if (p._cancel && p.bufC > 0) {
+        p._cancel = null; p.bufC = 0;
         startAtk(p, 'special');
-      } else if (inp.a && !p.prev.a) startAtk(p, moveArt(p, 'a'));
-      else if (inp.b && !p.prev.b) startAtk(p, 'heavy');
-      else if (inp.c && !p.prev.c) startAtk(p, 'special');
+      } else if (p.bufA > 0) { p.bufA = 0; startAtk(p, moveArt(p, 'a')); }
+      else if (p.bufB > 0) { p.bufB = 0; startAtk(p, 'heavy'); }
+      else if (p.bufC > 0) { p.bufC = 0; startAtk(p, 'special'); }
     } else {
       p.vx *= 0.85;
       // Dash während Active
@@ -273,9 +282,9 @@
         p.vx = p.facing * (m0.dash / Math.max(1, m0.active));
       }
       // Cancel on hit
-      if (p._cancel && inp.c && !p.prev.c) {
+      if (p._cancel && p.bufC > 0) {
         var cancelTo = p._cancel;
-        p._cancel = null;
+        p._cancel = null; p.bufC = 0;
         p.atk = null;
         startAtk(p, cancelTo);
       }
@@ -291,7 +300,7 @@
         spawnProj(st, p, m);
       }
       if (p.atkFrame >= total) {
-        if (!p.hitDone && p.hitCount === 0) p.combo = 0; // Whiff bricht Combo
+        if (!p.hitDone && p.hitCount === 0) { p.combo = 0; p.comboDmg = 0; } // Whiff bricht Combo
         p.atk = null;
         p._cancel = null;
       }
@@ -435,7 +444,7 @@
           invuln: p.invuln,
           crouch: !!p.crouch, blk: !!p.blocking,
           hitSeq: p.hitSeq | 0, hitKind: p.hitKind || '',
-          combo: p.combo | 0,
+          combo: p.combo | 0, comboDmg: p.comboDmg | 0,
           vx: Math.round((p.vx || 0) * 10) / 10,
           af: p.atk ? (p.atkFrame | 0) : 0
         };

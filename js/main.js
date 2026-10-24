@@ -1,8 +1,8 @@
-/* Einstieg, Spielschleife, Host/Client-Logik. v0.9 */
+/* Einstieg, Spielschleife, Host/Client-Logik. v1.0 */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION = 'v0.9';
+  var VERSION = 'v1.0';
   Plaza.VERSION = VERSION;
 
   function params() {
@@ -214,7 +214,7 @@
 
     function setUrl(raum, isHost) {
       try {
-        var q = '?raum=' + encodeURIComponent(raum || '') + '&v=0.9';
+        var q = '?raum=' + encodeURIComponent(raum || '') + '&v=1.0';
         if (isHost) q += '&host=1';
         history.replaceState(null, '', q);
       } catch (e) {}
@@ -416,7 +416,7 @@
         }
         if (msg.typ === 'wahl') {
           if (msg.ver && msg.ver !== VERSION) {
-            ui.setStatus('Andere Version (' + msg.ver + ') — bitte beide hart neu laden (?v=0.9)');
+            ui.setStatus('Andere Version (' + msg.ver + ') — bitte beide hart neu laden (?v=1.0)');
           }
           if (msg.name) {
             if (msg.seite === 0) hostName = String(msg.name).slice(0, 14);
@@ -584,7 +584,7 @@
         }
         acc = 0;
       } else if (mode === 'menue') {
-        Plaza.Render.menueHint(render, 'Versus · 2 Handys · v0.9');
+        Plaza.Render.menueHint(render, 'Versus · 2 Handys · v1.0');
         acc = 0;
       } else {
         Plaza.Render.menueHint(render, statusElText());

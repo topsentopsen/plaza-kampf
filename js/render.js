@@ -1,4 +1,4 @@
-/* Pixel-Canvas v0.9: detaillierte Sprites, Walk/Atk/Hurt, Hölle. */
+/* Pixel-Canvas v1.0: detaillierte Sprites, Walk/Atk/Hurt, Hölle. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -397,7 +397,7 @@
     drawLayer(ctx, layers.L5, 1.15, tick);
   }
 
-  /* ---- Figuren (v0.9 detailliert) ---- */
+  /* ---- Figuren (v1.0 detailliert) ---- */
   function schatten(ctx, x, yBoden, w, hoch) {
     var sc = Math.max(0.35, 1 - hoch / 60);
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
@@ -1006,6 +1006,9 @@
       ctx.fillStyle = '#e8c090';
       ctx.font = 'bold 48px ' + SCHRIFT;
       ctx.fillText(snap.countdown > 0 ? String(snap.countdown) : 'LOS!', W / 2, H / 2 + 8);
+      ctx.fillStyle = '#ffe080';
+      ctx.font = '8px ' + SCHRIFT;
+      ctx.fillText('A leicht · B schwer · C special · ▼ duck', W / 2, H / 2 + 22);
     }
     // Combo-Anzeige
     var ci, bestC = 0, bestId = -1;
@@ -1013,13 +1016,14 @@
       if ((snap.p[ci].combo | 0) > bestC) { bestC = snap.p[ci].combo | 0; bestId = ci; }
     }
     if (bestC >= 2 && snap.phase === 'kampf') {
-      ctx.fillStyle = '#ff6020';
+      ctx.fillStyle = bestC >= 5 ? '#ffd040' : '#ff6020';
       ctx.font = 'bold 14px ' + SCHRIFT;
       ctx.textAlign = 'center';
-      ctx.fillText(bestC + ' HIT!', W / 2, 42);
+      ctx.fillText((bestC >= 5 ? 'SUPER ' : '') + bestC + ' HIT!', W / 2, 42);
       ctx.fillStyle = '#ffe080';
       ctx.font = '9px ' + SCHRIFT;
-      ctx.fillText(snap.p[bestId].name, W / 2, 52);
+      var cd = snap.p[bestId].comboDmg | 0;
+      ctx.fillText(snap.p[bestId].name + (cd ? (' · ' + cd + ' DMG') : ''), W / 2, 52);
     }
     // Special-Callout
     for (var si = 0; si < snap.p.length; si++) {
