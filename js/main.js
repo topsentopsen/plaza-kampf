@@ -1,8 +1,8 @@
-/* Einstieg, Spielschleife, Host/Client-Logik. v1.1 */
+/* Einstieg, Spielschleife, Host/Client-Logik. v1.2 */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION = 'v1.1';
+  var VERSION = 'v1.2';
   Plaza.VERSION = VERSION;
 
   function params() {
@@ -584,7 +584,7 @@
         }
         acc = 0;
       } else if (mode === 'menue') {
-        Plaza.Render.menueHint(render, 'Versus · 2 Handys · v1.1');
+        Plaza.Render.menueHint(render, 'Versus · 2 Handys · v1.2');
         acc = 0;
       } else {
         Plaza.Render.menueHint(render, statusElText());
@@ -624,6 +624,9 @@
     document.addEventListener('fullscreenchange', function () { updateFsButton(); _skKey = ''; skalieren(); });
     document.addEventListener('webkitfullscreenchange', function () { updateFsButton(); _skKey = ''; skalieren(); });
     skalieren();
+    if ('serviceWorker' in navigator) {
+      try { navigator.serviceWorker.register('sw.js?v=1.2'); } catch (eSw) {}
+    }
     requestAnimationFrame(loop);
   }
 

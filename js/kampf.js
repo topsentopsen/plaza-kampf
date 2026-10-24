@@ -1,4 +1,4 @@
-/* Autoritative Kampfsimulation (läuft auf dem Host). v1.0: Input-Buffer, Combo-Dmg. */
+/* Autoritative Kampfsimulation (läuft auf dem Host). v1.2: Buffer + Feinschliff. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};

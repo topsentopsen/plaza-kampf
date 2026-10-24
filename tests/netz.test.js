@@ -15,7 +15,7 @@ var netz = Plaza.Netz.erstelle({
 assert.equal(typeof netz.linkFuer('https://x/','false'.length&&false), 'string');
 var link = netz.linkFuer('https://example.com/p/', false);
 // raum noch null → raum=
-assert.ok(link.indexOf('v=1.1') !== -1);
+assert.ok(link.indexOf('v=1.2') !== -1);
 assert.ok(link.indexOf('host=1') === -1);
 var linkH = netz.linkFuer('https://example.com/p/', true);
 assert.ok(linkH.indexOf('host=1') !== -1);

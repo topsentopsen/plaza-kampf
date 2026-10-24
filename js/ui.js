@@ -1,4 +1,4 @@
-/* Menü, Charakterwahl, Touch-Steuerung. v1.1 */
+/* Menü, Charakterwahl, Touch-Steuerung. v1.2 */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -198,6 +198,16 @@
           onSwap();
         });
       }
+      var tutBtn = overlay.querySelector('[data-act="tutorial"]');
+      if (tutBtn) tutBtn.addEventListener('click', function () {
+        if (Plaza.Sound) Plaza.Sound.sfx('ui');
+        showScreen('tutorial');
+      });
+      var tutBack = overlay.querySelector('[data-act="tut-back"]');
+      if (tutBack) tutBack.addEventListener('click', function () {
+        if (Plaza.Sound) Plaza.Sound.sfx('ui');
+        showScreen('menue');
+      });
       var iosOk = root.querySelector('[data-act="ios-hint-ok"]');
       if (iosOk) iosOk.addEventListener('click', function () {
         var h = root.querySelector('#ios-hint');

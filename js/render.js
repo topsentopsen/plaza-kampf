@@ -1,4 +1,4 @@
-/* Pixel-Canvas v1.1: detaillierte Sprites, Walk/Atk/Hurt, Hölle. */
+/* Pixel-Canvas v1.2: detaillierte Sprites, Walk/Atk/Hurt, Hölle. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -408,7 +408,7 @@
     drawLayer(ctx, layers.L5, 1.15, tick);
   }
 
-  /* ---- Figuren (v1.1 detailliert) ---- */
+  /* ---- Figuren (v1.2 detailliert) ---- */
   function schatten(ctx, x, yBoden, w, hoch) {
     var sc = Math.max(0.35, 1 - hoch / 60);
     ctx.fillStyle = 'rgba(0,0,0,0.7)';

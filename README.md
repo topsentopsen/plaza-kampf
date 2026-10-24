@@ -1,4 +1,4 @@
-# Plaza-Kampf v1.1
+# Plaza-Kampf v1.2
 
 Dunkles Versus — *la Pelea del Infierno*. Feuer, Vulkane, ernste Street-Fighter-Chars. Statisches HTML/JS auf GitHub Pages.
 
@@ -100,3 +100,10 @@ Live: https://topsentopsen.github.io/plaza-kampf/
 - Porträt-Canvas auf Charakterkarten
 - Neon-Schild „PLAZA“ in der Arena
 - Cache: `?v=1.1`
+
+
+## v1.2 „Release“
+- PWA: Manifest, Icons, Service Worker (Home-Bildschirm)
+- Tutorial-Screen mit Moves & Block-Regeln
+- Feinschliff auf v1.1-Basis
+- Cache: `?v=1.2`
