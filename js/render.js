@@ -1073,6 +1073,17 @@
       M(lx + (s >> 1) - 2, ly + (s >> 1) - 2, 3, 3, col);
       M(lx - 2, ly - 2, 5, 5, '#fff8ee');
     }
+    // v1.7: Impact-Stern für Faust/Hammer, erst alle Konturen, dann Farbe
+    function glutStern(lx, ly, s, col) {
+      var d = Math.round(s * 0.55), q;
+      M(lx - s - 2, ly - 5, s * 2 + 4, 10, ink);
+      M(lx - 5, ly - s - 2, 10, s * 2 + 4, ink);
+      for (q = 0; q < 4; q++) M(lx + (q & 1 ? d : -d) - 5, ly + (q & 2 ? d : -d) - 5, 10, 10, ink);
+      M(lx - s, ly - 3, s * 2, 6, col);
+      M(lx - 3, ly - s, 6, s * 2, col);
+      for (q = 0; q < 4; q++) M(lx + (q & 1 ? d : -d) - 3, ly + (q & 2 ? d : -d) - 3, 6, 6, col);
+      M(lx - 5, ly - 5, 10, 10, '#fff8ee');
+    }
     function sonne(cx0, cy0, r) {
       var lagen = [[r + 6, '#ff4a18', 0.35], [r, '#ffb040', 1], [Math.round(r * 0.55), '#fff0c0', 1]];
       for (var k = 0; k < lagen.length; k++) {
@@ -1681,12 +1692,17 @@
       var vert = Math.abs(dy) > Math.abs(dx);
       var kw = vert ? 32 : 20, kh = vert ? 20 : 32;
       var kx = Math.round(ex - kw / 2), ky = Math.round(eyy - kh / 2);
-      if (hot) { alpha(0.35); M(kx - 6, ky - 6, kw + 12, kh + 12, '#ff4a18'); alpha(1); }
+      if (hot) {
+        alpha(0.22); M(kx - 16, ky - 16, kw + 32, kh + 32, '#ff4a18');
+        alpha(0.45); M(kx - 8, ky - 8, kw + 16, kh + 16, '#ff6a20');
+        alpha(1);
+      }
       P(kx, ky, kw, kh, '#4a4a52');
       var face = hot ? '#ff4a18' : '#7a7a84';
       if (vert) { M(kx + kw - 6, ky + 2, 4, kh - 4, face); M(kx + 2, ky + 2, 4, kh - 4, '#2a2a30'); }
       else { M(kx + 2, ky + kh - 6, kw - 4, 4, face); M(kx + 2, ky + 2, kw - 4, 4, '#2a2a30'); }
       M(kx + (kw >> 1) - 2, ky + (kh >> 1) - 2, 4, 4, '#c09048');
+      if (hot && impact) glutStern(Math.round(ex + dx * 20), Math.round(eyy + dy * 20), 18 + wt * 3, '#ffe080');
     }
     function toniHammer() {
       // Pendel: Atmen / Gewichtswechsel / Schritt lassen den hängenden Hammer leicht schwingen
@@ -1709,13 +1725,19 @@
       if (art === 'special' && phase !== 'wind') {
         var gx = aF[2] + 18;
         alpha(0.9);
-        M(gx - 30, h - 3, 60, 3, '#ff4a18');
-        M(gx - 18, h - 6, 4, 6, '#ffb040'); M(gx + 12, h - 5, 4, 5, '#ffb040');
+        M(gx - 42, h - 6, 84, 8, ink); M(gx - 40, h - 4, 80, 4, '#ff4a18');
+        M(gx - 24, h - 14, 8, 10, ink); M(gx - 22, h - 12, 4, 8, '#ffb040');
+        M(gx + 14, h - 12, 8, 8, ink); M(gx + 16, h - 10, 4, 6, '#ffb040');
+        // Rissglut unter dem Pflaster (BODEN + 8 = 648, wie die Arena-Risse)
+        M(gx - 32, h + 8, 22, 4, '#ff3a08'); M(gx - 14, h + 8, 4, 12, '#ff3a08');
+        M(gx + 8, h + 10, 26, 4, '#ff3a08'); M(gx + 30, h + 10, 4, 10, '#ff6020');
         for (var i = 0; i < 6; i++) {
-          M(gx + (i - 3) * 11, h - 8 - ((atkF * 5 + i * 7) % 26), 4, 4, i % 2 ? '#ffb040' : '#ffe080');
+          var ey0 = h - 12 - ((atkF * 5 + i * 7) % 34);
+          M(gx + (i - 3) * 14 - 2, ey0 - 2, 8, 8, ink);
+          M(gx + (i - 3) * 14, ey0, 4, 4, i % 2 ? '#ffb040' : '#ffe080');
         }
         alpha(0.4);
-        M(gx - 36, h - 14, 72, 10, '#5a3020');
+        M(gx - 46, h - 18, 92, 12, '#5a3020');
         alpha(1);
       }
     }
@@ -1740,9 +1762,11 @@
       var nw = Math.round(30 + 80 * e), nh = Math.round(30 + 44 * e);
       var nx = hx0 + 6, ny = Math.round(hy0 - nh / 2);
       alpha(0.92);
-      for (yy = ny; yy <= ny + nh; yy += 9) M(nx, yy, nw, 2, '#8a6040');
-      for (xx = nx; xx <= nx + nw; xx += 9) M(xx, ny, 2, nh, '#8a6040');
-      for (yy = ny; yy <= ny + nh; yy += 9) for (xx = nx; xx <= nx + nw; xx += 9) M(xx - 1, yy - 1, 4, 4, '#5ec8b8');
+      for (yy = ny; yy <= ny + nh; yy += 9) M(nx - 1, yy - 1, nw + 2, 4, ink);
+      for (xx = nx; xx <= nx + nw; xx += 9) M(xx - 1, ny - 1, 4, nh + 2, ink);
+      for (yy = ny; yy <= ny + nh; yy += 9) M(nx, yy, nw, 2, '#b08050');
+      for (xx = nx; xx <= nx + nw; xx += 9) M(xx, ny, 2, nh, '#b08050');
+      for (yy = ny; yy <= ny + nh; yy += 18) for (xx = nx; xx <= nx + nw; xx += 18) K(xx - 3, yy - 3, 8, 8, '#5ec8b8');
       for (xx = nx + 4; xx < nx + nw; xx += 18) K(xx, ny - 5, 9, 7, '#c04020');
       for (xx = nx + 8; xx < nx + nw; xx += 18) M(xx, ny + nh, 6, 5, '#5a5a60');
       alpha(1);
@@ -1857,8 +1881,10 @@
 
     // Impact-Frame: Faust blitzt weiß, Stern skaliert mit Gewicht
     if (impact && !kick && !mv.projectile) {
-      alpha(0.6); M(aF[2] - 9, aF[3] - 9, 18, 18, '#fff8ee'); alpha(1);
-      stern(aF[2] + 12, aF[3], 12 + wt * 2, '#ffe080');
+      var ig = 18 + wt * 4;
+      alpha(0.3); M(aF[2] - ig, aF[3] - ig, ig * 2, ig * 2, '#ff4a18');
+      alpha(0.7); M(aF[2] - 12, aF[3] - 12, 24, 24, '#fff8ee'); alpha(1);
+      if (id !== 'toni') glutStern(aF[2] + 14, aF[3], 16 + wt * 4, '#ffe080');   // Toni: Stern sitzt am Hammer (F3b)
     }
 
     // Block-Schild
@@ -1917,31 +1943,94 @@
   }
 
   /* ---- FX ---- */
-  function spawnFx(kind, x, y, col) {
-    fx.push({ kind: kind, x: x, y: y, t: 0, col: col || '#fff8ee' });
+  /* ==== Plaza-Kampf v1.7 — FX-Drop-in (render.js) ===================================
+   * ANKER: ersetzt in js/render.js alles ab der Zeile
+   *            "  /* ---- FX ---- *\/"
+   *        bis AUSSCHLIESSLICH zur Zeile
+   *            "  function hud(ctx, snap, ich) {"
+   *        (also spawnFx, updateFxFromDiff, nametag, drawFx). nametag ist unverändert.
+   *        Neu im Block: zeichneProjektile(ctx, snap). Den Aufruf in zeichne() setzt
+   *        fig-patch-v1.7.js (Patch Z1), dort steht auch der resetFx-Zusatz (Patch Z2).
+   * Regeln: rein visuell. Lebensdauern (e.t-Grenzen), shake, flash und kampf.js bleiben
+   *        unverändert, die Projektil-Hitboxen auch. Keine Math.random, damit Screenshots und
+   *        beide MP-Clients identisch bleiben. 2-px-Kontur überall in FX_INK.
+   * Partikel-Budget (fx-Einträge pro Ereignis, v1.6 → v1.7): Treffer 3 → 6, Heavy 6 → 10,
+   *        Special 6 → 9, Heavy+Special 9 → 13 (Obergrenze 2× = 18), Block 1 → 2, Armor 1 → 2,
+   *        Landung 1 → 1. Höchstens 2× pro Ereignis.
+   * ================================================================================= */
+  var FX_INK = '#1a0606';
+  var FX_R = [];                 // Scratch-Liste [x, y, w, h, …], wird pro Effekt geleert
+  var fxSeq = 0;
+  var projAlt = [];              // Projektil-Positionen des Vorframes (für die Trail-Richtung)
+
+  function fxHash(n) {
+    n = (n ^ 61) ^ (n >>> 16);
+    n = Math.imul(n, 0x27d4eb2d);
+    return ((n ^ (n >>> 15)) >>> 0) / 4294967296;
+  }
+
+  // Alle Rechtecke erst als Kontur (+2 px), dann in Farbe → keine Tinte in Überlappungen
+  function fxKontur(ctx, R, col) {
+    var k;
+    ctx.fillStyle = FX_INK;
+    for (k = 0; k < R.length; k += 4) ctx.fillRect(Math.round(R[k]) - 2, Math.round(R[k + 1]) - 2, Math.round(R[k + 2]) + 4, Math.round(R[k + 3]) + 4);
+    ctx.fillStyle = col;
+    for (k = 0; k < R.length; k += 4) ctx.fillRect(Math.round(R[k]), Math.round(R[k + 1]), Math.round(R[k + 2]), Math.round(R[k + 3]));
+    R.length = 0;
+  }
+
+  // Zentriertes Quadrat in die Liste
+  function fxQ(R, cx, cy, s) { R.push(cx - s / 2, cy - s / 2, s, s); }
+
+  // Kreis mit 2-px-Kontur
+  function fxKreis(ctx, x, y, r, col) {
+    ctx.fillStyle = FX_INK;
+    ctx.beginPath(); ctx.arc(x, y, r + 2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function spawnFx(kind, x, y, col, vx, vy) {
+    fx.push({ kind: kind, x: x, y: y, t: 0, col: col || '#fff8ee', vx: vx || 0, vy: vy || 0, seed: (fxSeq++) * 977 + (x | 0) });
+  }
+
+  // n Splitter in Rückstoßrichtung (dir = ±1), Fächer nach oben
+  function splitter(n, x, y, dir, col, kraft) {
+    for (var k = 0; k < n; k++) {
+      var h = fxHash(fxSeq * 31 + k * 7 + (x | 0));
+      var ang = -0.25 - h * 1.1;                       // 15°–78° über der Horizontalen
+      var v = kraft * (0.75 + 0.5 * fxHash(fxSeq * 17 + k));
+      spawnFx('shard', x, y, k === 0 ? '#fff8ee' : col, dir * Math.cos(ang) * v, Math.sin(ang) * v);
+    }
   }
 
   function updateFxFromDiff(snap) {
     if (!snap || !snap.p) return;
+    var BODEN = Plaza.Kampf.BODEN;
     if (prevSnap && prevSnap.p) {
       for (var i = 0; i < 2; i++) {
         var a = prevSnap.p[i], b = snap.p[i];
         if (!a || !b) continue;
         var kind = b.hitKind || '';
         var seqGrew = (b.hitSeq | 0) > (a.hitSeq | 0);
+        var gg = snap.p[1 - i];
+        var dir = gg && gg.x > b.x ? -1 : 1;           // weg vom Angreifer
         if (b.hp < a.hp || seqGrew) {
           if (kind === 'heavy' || kind === 'throw') shake = 5;
           else if (kind === 'block') shake = 1;
           flash[i] = kind === 'armor' ? 6 : 4;
           if (kind === 'block') {
             spawnFx('block', b.x, b.y - 56, '#ffe080');
+            splitter(1, b.x - dir * 24, b.y - 72, -dir, '#ffe080', 8);
           } else if (kind === 'armor') {
             spawnFx('armor', b.x, b.y - 64, '#ffb040');
+            splitter(1, b.x - dir * 36, b.y - 80, -dir, '#ffb040', 9);
           } else {
             var col = Plaza.Chars.finde(b.charId).accent || '#ff3a08';
             spawnFx('spark', b.x, b.y - 64, col);
             spawnFx('spark', b.x + 20, b.y - 80, '#fff0c0');
             spawnFx('ember', b.x - 12, b.y - 48, '#ff6020');
+            splitter(3, b.x, b.y - 68, dir, col, 11);
             if (kind === 'special' || (b.hitKind === 'special')) {
               spawnFx('fireball', b.x + 16, b.y - 72, col);
               spawnFx('ice', b.x - 24, b.y - 56, '#80d8ff');
@@ -1951,11 +2040,12 @@
               spawnFx('slash', b.x, b.y - 72, col);
               spawnFx('spark', b.x - 16, b.y - 88, '#fff8ee');
               spawnFx('fireball', b.x, b.y - 88, col);
+              if (b.grounded || kind === 'throw') spawnFx('shock', b.x, BODEN, col);
             }
           }
         }
-        if (!a.grounded && b.grounded) spawnFx('dust', b.x, Plaza.Kampf.BODEN, '#5a3020');
-        if (a.grounded && !b.grounded) spawnFx('dust', b.x, Plaza.Kampf.BODEN, '#3a2010');
+        if (!a.grounded && b.grounded) spawnFx('dust', b.x, BODEN, '#5a3020');
+        if (a.grounded && !b.grounded) spawnFx('dust', b.x, BODEN, '#3a2010');
         // Track hitSeq in prev
         a.hitSeq = b.hitSeq; a.hitKind = b.hitKind;
       }
@@ -1985,84 +2075,312 @@
     ctx.fillText(label, p.x, top);
   }
 
+  // Bodenriss-Glut: 4 gezackte Spalten ab BODEN nach unten in den Rissbereich (≥ 648)
+  function rissGlut(ctx, x, y0, t, life, seed, col) {
+    var reach = Math.min(1, (t + 1) / 4);              // wachsen 4 Ticks, dann ausglühen
+    ctx.globalAlpha = Math.max(0, 1 - t / life);
+    for (var r = 0; r < 4; r++) {
+      var sx = r < 2 ? -1 : 1, cx = x + sx * (8 + r % 2 * 10), cy = y0 + 8, n = Math.round(6 * reach);
+      for (var s = 0; s < n; s++) {
+        var h = fxHash(seed + r * 101 + s * 13);
+        var dx = sx * (8 + Math.round(h * 4) * 2), dy = (h < 0.5 ? 2 : 4);
+        if (cy + dy > y0 + 40) dy = -2;
+        R_push(cx, cy, dx, dy);
+        cx += dx; cy += dy;
+      }
+    }
+    fxKontur(ctx, FX_R, t < 4 ? '#ffb040' : col);
+    ctx.globalAlpha = 1;
+  }
+  function R_push(cx, cy, dx, dy) {
+    FX_R.push(Math.min(cx, cx + dx), cy, Math.abs(dx) + 4, 4);
+    FX_R.push(cx + dx, Math.min(cy, cy + dy), 4, Math.abs(dy) + 4);
+  }
+
   function drawFx(ctx) {
+    var R = FX_R, k, d, s;
     for (var i = fx.length - 1; i >= 0; i--) {
       var e = fx[i];
       e.t++;
       if (e.kind === 'spark') {
-        var s = e.t < 2 ? 16 : e.t < 4 ? 32 : e.t < 7 ? 20 : 0;
+        // 8-Strahl-Stern, v1.6: 16/32/20 → v1.7: 24/44/28 Halbgröße, Kern 8 px + Kontur
+        s = e.t < 2 ? 24 : e.t < 4 ? 44 : e.t < 7 ? 28 : 0;
         if (s <= 0) { fx.splice(i, 1); continue; }
-        ctx.fillStyle = e.col;
-        ctx.fillRect(e.x - 4, e.y - s, 8, s * 2);
-        ctx.fillRect(e.x - s, e.y - 4, s * 2, 8);
+        d = s * 0.6;
+        R.push(e.x - 4, e.y - s, 8, s * 2, e.x - s, e.y - 4, s * 2, 8);
+        for (k = 0; k < 4; k++) {
+          var sx = k & 1 ? 1 : -1, sy = k & 2 ? 1 : -1;
+          fxQ(R, e.x + sx * d * 0.4, e.y + sy * d * 0.4, 8);
+          fxQ(R, e.x + sx * d * 0.7, e.y + sy * d * 0.7, 6);
+          fxQ(R, e.x + sx * d, e.y + sy * d, 4);
+        }
+        fxKontur(ctx, R, e.col);
         ctx.fillStyle = '#fff8ee';
-        ctx.fillRect(e.x - 4, e.y - 4, 8, 8);
+        ctx.fillRect(Math.round(e.x - 2), Math.round(e.y - s * 0.6), 4, Math.round(s * 1.2));
+        ctx.fillRect(Math.round(e.x - s * 0.6), Math.round(e.y - 2), Math.round(s * 1.2), 4);
+        ctx.fillRect(Math.round(e.x - 6), Math.round(e.y - 6), 12, 12);
+      } else if (e.kind === 'shard') {
+        if (e.t > 10) { fx.splice(i, 1); continue; }
+        e.x += e.vx; e.y += e.vy; e.vy += 0.9; e.vx *= 0.92;
+        s = e.t < 4 ? 8 : e.t < 7 ? 6 : 4;
+        // kurzer Schweif gegen die Flugrichtung
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = '#ff3a08';
+        ctx.fillRect(Math.round(e.x - e.vx * 1.4 - 2), Math.round(e.y - e.vy * 1.4 - 2), 4, 4);
+        ctx.globalAlpha = 1;
+        fxQ(R, e.x, e.y, s);
+        fxKontur(ctx, R, e.t < 5 ? e.col : '#ff6020');
       } else if (e.kind === 'slash') {
+        // Sichel aus 9 Segmenten statt 3 Balken, wandert wie v1.6 mit 4 px/Tick
         if (e.t > 6) { fx.splice(i, 1); continue; }
-        ctx.fillStyle = e.col;
         ctx.globalAlpha = 1 - e.t / 6;
-        ctx.fillRect(e.x - 40 + e.t*4, e.y - 8, 56, 8);
-        ctx.fillRect(e.x - 32 + e.t*4, e.y - 20, 40, 4);
+        var ox = e.x - 8 + e.t * 4;
+        for (k = 0; k <= 8; k++) {
+          var an = -2.5 + k * 0.33, th = 4 + Math.round(8 * Math.sin(k / 8 * Math.PI));
+          R.push(ox + Math.cos(an) * 52 - 6, e.y + 26 + Math.sin(an) * 40 - th / 2, 12, th);
+        }
+        fxKontur(ctx, R, e.col);
         ctx.fillStyle = '#fff8ee';
-        ctx.fillRect(e.x - 24 + e.t*4, e.y - 4, 24, 4);
+        for (k = 2; k <= 6; k++) {
+          var an2 = -2.5 + k * 0.33;
+          ctx.fillRect(Math.round(ox + Math.cos(an2) * 52 - 4), Math.round(e.y + 26 + Math.sin(an2) * 40 - 1), 8, 3);
+        }
         ctx.globalAlpha = 1;
       } else if (e.kind === 'block') {
         if (e.t > 7) { fx.splice(i, 1); continue; }
-        ctx.fillStyle = '#ffe080';
         ctx.globalAlpha = 1 - e.t / 7;
-        ctx.fillRect(e.x - 24, e.y - 32, 48, 8);
-        ctx.fillRect(e.x - 28, e.y - 24, 8, 40);
-        ctx.fillRect(e.x + 20, e.y - 24, 8, 40);
-        ctx.fillStyle = '#fff8ee';
-        ctx.fillRect(e.x - 8, e.y - 16, 16, 16);
+        s = e.t < 2 ? 0 : 4;                           // Klammer springt nach Tick 2 kurz auf
+        R.push(e.x - 32 - s, e.y - 40, 64 + s * 2, 8);
+        R.push(e.x - 36 - s, e.y - 32, 8, 52, e.x + 28 + s, e.y - 32, 8, 52);
+        R.push(e.x - 28 - s, e.y + 20, 16, 6, e.x + 12 + s, e.y + 20, 16, 6);
+        fxKontur(ctx, R, '#ffe080');
+        // Raute im Zentrum
+        R.push(e.x - 4, e.y - 20, 8, 32, e.x - 12, e.y - 8, 24, 8);
+        fxKontur(ctx, R, '#fff8ee');
+        ctx.fillStyle = '#ffb040';
+        for (k = 0; k < 4; k++) ctx.fillRect(Math.round(e.x + (k & 1 ? 1 : -1) * (20 + e.t * 6) - 3), Math.round(e.y + (k & 2 ? 8 : -32) - e.t * 2), 6, 6);
         ctx.globalAlpha = 1;
       } else if (e.kind === 'armor') {
         if (e.t > 8) { fx.splice(i, 1); continue; }
-        ctx.fillStyle = '#ffb040';
-        ctx.globalAlpha = 0.7 - e.t / 12;
-        ctx.fillRect(e.x - 36, e.y - 48, 72, 8);
-        ctx.fillRect(e.x - 36, e.y + 24, 72, 8);
-        ctx.fillRect(e.x - 36, e.y - 48, 8, 80);
-        ctx.fillRect(e.x + 28, e.y - 48, 8, 80);
+        ctx.globalAlpha = Math.max(0, 0.85 - e.t / 10);
+        s = e.t * 2;
+        R.push(e.x - 44 - s, e.y - 56 - s, 88 + s * 2, 8, e.x - 44 - s, e.y + 32 + s, 88 + s * 2, 8);
+        R.push(e.x - 44 - s, e.y - 56 - s, 8, 96 + s * 2, e.x + 36 + s, e.y - 56 - s, 8, 96 + s * 2);
+        fxKontur(ctx, R, '#ffb040');
+        ctx.fillStyle = '#fff0c0';
+        ctx.fillRect(e.x - 42 - s, e.y - 54 - s, 12, 4);
+        ctx.fillRect(e.x + 30 + s, e.y + 34 + s, 12, 4);
         ctx.globalAlpha = 1;
       } else if (e.kind === 'fireball') {
         if (e.t > 10) { fx.splice(i, 1); continue; }
-        var fr = 24 - e.t * 1.6;
-        ctx.fillStyle = '#ff3a08';
-        ctx.beginPath(); ctx.arc(e.x, e.y - e.t*4, fr, 0, Math.PI * 2); ctx.fill();
+        var fr = 32 - e.t * 2.2, fy = e.y - e.t * 4;
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = '#ff4a18';
+        ctx.beginPath(); ctx.arc(e.x, fy, fr + 12, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
+        fxKreis(ctx, e.x, fy, fr, '#ff3a08');
         ctx.fillStyle = '#ffb040';
-        ctx.fillRect(e.x - 8, e.y - e.t*4 - 8, 16, 16);
+        ctx.beginPath(); ctx.arc(e.x - 2, fy - 2, fr * 0.6, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = e.t < 3 ? '#fff8ee' : '#ffe080';
+        ctx.fillRect(Math.round(e.x - 8), Math.round(fy - 10), 12, 12);
       } else if (e.kind === 'ice') {
         if (e.t > 9) { fx.splice(i, 1); continue; }
         ctx.globalAlpha = 1 - e.t / 9;
-        ctx.fillStyle = '#80d8ff';
-        ctx.fillRect(e.x - 4 - e.t*4, e.y - 24, 8, 48);
-        ctx.fillRect(e.x - 24, e.y - 4, 48, 8);
+        R.push(e.x - 4 - e.t * 4, e.y - 32, 8, 64, e.x - 32, e.y - 4, 64, 8);
+        for (k = 0; k < 4; k++) fxQ(R, e.x + (k & 1 ? 1 : -1) * (18 + e.t * 2), e.y + (k & 2 ? 1 : -1) * (18 + e.t * 2), 8);
+        fxKontur(ctx, R, '#80d8ff');
         ctx.fillStyle = '#e8ffff';
         ctx.fillRect(e.x - 8, e.y - 8, 16, 16);
         ctx.globalAlpha = 1;
       } else if (e.kind === 'knife') {
         if (e.t > 8) { fx.splice(i, 1); continue; }
         ctx.globalAlpha = 1 - e.t / 8;
-        ctx.fillStyle = '#c0c8d0';
-        ctx.fillRect(e.x - 24 + e.t*4, e.y - 4, 40, 8);
-        ctx.fillStyle = '#ff2a4a';
-        ctx.fillRect(e.x + 16 + e.t*4, e.y - 8, 12, 16);
+        var kx = e.x + e.t * 4;
+        R.push(kx - 32, e.y - 4, 52, 8, kx - 40, e.y - 2, 8, 4);
+        fxKontur(ctx, R, '#c0c8d0');
+        R.push(kx + 20, e.y - 10, 14, 20);
+        fxKontur(ctx, R, '#ff2a4a');
+        ctx.fillStyle = '#fff8ee';
+        ctx.fillRect(kx - 28, e.y - 4, 44, 2);
         ctx.globalAlpha = 1;
       } else if (e.kind === 'ember') {
         if (e.t > 12) { fx.splice(i, 1); continue; }
-        ctx.fillStyle = e.t < 4 ? '#ffb040' : '#ff3a08';
-        ctx.fillRect(e.x + (e.t % 3)*4 - 4, e.y - e.t*4, 4, 8);
-      } else if (e.kind === 'dust') {
-        if (e.t > 8) { fx.splice(i, 1); continue; }
-        ctx.fillStyle = e.col;
-        ctx.globalAlpha = 1 - e.t / 8;
-        ctx.fillRect(e.x - 16 - e.t*4, e.y - 8, 12, 8);
-        ctx.fillRect(e.x + 8 + e.t*4, e.y - 4, 12, 8);
+        var exx = e.x + (e.t % 3) * 4 - 4, eyy = e.y - e.t * 4;
+        ctx.globalAlpha = 0.45;
+        ctx.fillStyle = '#ff3a08';
+        ctx.fillRect(exx, eyy + 12, 4, 8);
         ctx.globalAlpha = 1;
+        R.push(exx - 1, eyy, 6, 10);
+        fxKontur(ctx, R, e.t < 4 ? '#ffb040' : '#ff3a08');
+      } else if (e.kind === 'dust') {
+        // je Seite 2 Staubballen (wachsen + driften), Unterkante auf BODEN
+        if (e.t > 8) { fx.splice(i, 1); continue; }
+        ctx.globalAlpha = 1 - e.t / 8;
+        for (k = 0; k < 4; k++) {
+          var sd = k & 1 ? 1 : -1, big = k < 2;
+          s = (big ? 20 : 12) + e.t * 2;
+          var dx = sd * ((big ? 20 : 44) + e.t * (big ? 5 : 7));
+          R.push(e.x + dx - s / 2, e.y - s + 2 - (big ? 0 : e.t), s, s);
+        }
+        fxKontur(ctx, R, e.col);
+        ctx.fillStyle = hexShade(e.col, 40);
+        for (k = 0; k < 2; k++) {
+          var sd2 = k ? 1 : -1;
+          s = 20 + e.t * 2;
+          ctx.fillRect(Math.round(e.x + sd2 * (20 + e.t * 5) - s / 2 + 2), Math.round(e.y - s + 4), s - 6, 4);
+        }
+        ctx.globalAlpha = 1;
+      } else if (e.kind === 'shock') {
+        // Boden-Schockwelle: flache Ellipse an BODEN + Glutspalten in den Rissbereich (≥ 648)
+        if (e.t > 12) { fx.splice(i, 1); continue; }
+        var rr = 28 + e.t * 12;
+        ctx.globalAlpha = Math.max(0, 1 - e.t / 12);
+        ctx.lineWidth = 8; ctx.strokeStyle = FX_INK;
+        ctx.beginPath(); ctx.ellipse(e.x, e.y + 6, rr, rr * 0.18 + 4, 0, 0, Math.PI * 2); ctx.stroke();
+        ctx.lineWidth = 4; ctx.strokeStyle = e.t < 4 ? '#ffe080' : '#ff4a18';
+        ctx.beginPath(); ctx.ellipse(e.x, e.y + 6, rr, rr * 0.18 + 4, 0, 0, Math.PI * 2); ctx.stroke();
+        ctx.lineWidth = 1;
+        ctx.globalAlpha = 1;
+        rissGlut(ctx, e.x, e.y, e.t, 12, e.seed, '#ff3a08');
       }
     }
     for (var j = 0; j < 2; j++) if (flash[j] > 0) flash[j]--;
+  }
+
+  /* ---- Projektile (v1.7): größer, 2-px-Kontur, Trail gegen die Flugrichtung ----
+   * Hitboxen (kampf.js, unverändert): Ball 40×32·scale um (x, y); Fächer 32×32;
+   * Bodenwelle 56×32 um (x, BODEN−16) → Grafik steht auf BODEN = y + h/2. */
+  function projRichtung(pr, snap) {
+    var best = null, bd = 64 * 64, k;
+    for (k = 0; k < projAlt.length; k++) {
+      var q = projAlt[k];
+      if (q.owner !== pr.owner || q.typ !== pr.typ) continue;
+      var dx = pr.x - q.x, dy = pr.y - q.y, dd = dx * dx + dy * dy;
+      if (dd < bd && dd > 0) { bd = dd; best = q; }
+    }
+    var vx, vy;
+    if (best) { vx = pr.x - best.x; vy = pr.y - best.y; }
+    else {
+      var o = snap.p && snap.p[pr.owner];
+      vx = o && o.x > pr.x ? -10 : 10; vy = 0;
+    }
+    var l = Math.sqrt(vx * vx + vy * vy) || 1;
+    return [vx / l, vy / l];
+  }
+
+  function zeichneProjektile(ctx, snap) {
+    var list = snap.projektil || [], tck = snap.tick || 0, BODEN = Plaza.Kampf.BODEN;
+    var R = FX_R, i, k;
+    for (i = 0; i < list.length; i++) {
+      var pr = list[i];
+      var typ = pr.typ || 'ball';
+      var px = pr.x | 0, py = pr.y | 0;
+      var u = projRichtung(pr, snap), ux = u[0], uy = u[1];
+      if (typ === 'bodenwelle') {
+        // Lava-Erdstoß: Unterkante exakt BODEN, Zacken bis 40 px hoch, Glutspur dahinter
+        var gy = Math.round(py + (pr.h || 32) / 2);
+        if (Math.abs(gy - BODEN) > 2) gy = BODEN;
+        var ww = 80 + ((tck + i) % 3) * 4;
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = '#ff3a08';
+        ctx.beginPath(); ctx.ellipse(px, gy + 6, ww * 0.8, 12, 0, 0, Math.PI * 2); ctx.fill();
+        for (k = 1; k <= 3; k++) {             // Glutspur auf dem Pflaster
+          ctx.globalAlpha = 0.5 - k * 0.12;
+          ctx.fillRect(Math.round(px - ux * (ww / 2 + k * 22) - 10), gy + 2, 20, 6);
+        }
+        ctx.globalAlpha = 1;
+        R.push(px - ww / 2, gy - 8, ww, 16);
+        fxKontur(ctx, R, '#5a0800');
+        for (var zw = -3; zw <= 3; zw++) {
+          var zh = 20 + ((tck + zw + i) % 4) * 6 - Math.abs(zw) * 2;
+          R.push(px + zw * 12 - 5, gy - zh, 10, zh);
+        }
+        fxKontur(ctx, R, '#ff3a08');
+        ctx.fillStyle = '#ffb040';
+        for (zw = -2; zw <= 2; zw++) {
+          var zh2 = 10 + ((tck + zw + i + 2) % 3) * 6;
+          ctx.fillRect(px + zw * 12 - 3, gy - zh2, 6, zh2 - 4);
+        }
+        ctx.fillStyle = '#fff0c0';
+        ctx.fillRect(px - 4, gy - 30 - ((tck >> 1) % 3) * 4, 8, 8);
+        // Risse unter der Welle glühen mit (y ≥ 648)
+        ctx.fillStyle = '#ff6020';
+        ctx.globalAlpha = 0.7;
+        ctx.fillRect(px - 30, gy + 10, 22, 4); ctx.fillRect(px - 10, gy + 10, 4, 10);
+        ctx.fillRect(px + 12, gy + 12, 26, 4); ctx.fillRect(px + 34, gy + 12, 4, 8);
+        ctx.globalAlpha = 1;
+      } else if (typ === 'fächer' || typ === 'faecher') {
+        // Rosenmesser ~44 px (v1.6: 10 px), Klinge in Flugrichtung, Blüten-Trail
+        var spin = ((tck + i * 7) >> 2) % 2;
+        for (k = 3; k >= 1; k--) {
+          ctx.globalAlpha = 0.6 - k * 0.13;
+          ctx.fillStyle = k === 1 ? '#ff6080' : '#d01838';
+          var bs = 12 - k * 2;
+          ctx.fillRect(Math.round(px - ux * (8 + k * 14) - bs / 2), Math.round(py - uy * (8 + k * 14) - bs / 2 + (k & 1) * 4 - 2), bs, bs);
+        }
+        ctx.globalAlpha = 1;
+        // Klinge: 5 Quadrate entlang u, zur Spitze schmaler
+        for (k = 0; k < 5; k++) fxQ(R, px + ux * (6 + k * 6), py + uy * (6 + k * 6), k < 2 ? 8 : (k < 4 ? 6 : 4));
+        fxKontur(ctx, R, '#c0c8d0');
+        ctx.fillStyle = '#fff8ee';
+        for (k = 1; k < 4; k++) ctx.fillRect(Math.round(px + ux * (6 + k * 6) - 1), Math.round(py + uy * (6 + k * 6) - 2), 2, 2);
+        // Blüte: Kern + 4 Blätter, wechselt alle 4 Ticks zwischen + und × (Drehung)
+        var bx = px - ux * 6, by = py - uy * 6;
+        fxQ(R, bx, by, 12);
+        for (k = 0; k < 4; k++) {
+          var pa = k * Math.PI / 2 + spin * Math.PI / 4;
+          fxQ(R, bx + Math.cos(pa) * 9, by + Math.sin(pa) * 9, 10);
+        }
+        fxKontur(ctx, R, '#b01030');
+        ctx.fillStyle = '#ff2a4a';
+        ctx.fillRect(Math.round(bx - 6), Math.round(by - 6), 12, 12);
+        ctx.fillStyle = '#ff8090';
+        ctx.fillRect(Math.round(bx - 5), Math.round(by - 5), 6, 3);
+        ctx.fillStyle = '#80081c';
+        ctx.fillRect(Math.round(bx - 1), Math.round(by - 1), 4, 4);
+        // Eis-/Glanzkante an der Spitze
+        ctx.fillStyle = '#a0e8ff';
+        ctx.globalAlpha = 0.85;
+        ctx.fillRect(Math.round(px + ux * 30 - 1), Math.round(py + uy * 30 - 3), 2, 6);
+        ctx.globalAlpha = 1;
+      } else {
+        // Feuerball / Sonnenball: Glow-Hof, Kontur, rotierende Strahlen, 4-Kreis-Trail
+        var rad = Math.max(10, (pr.w || 40) / 2);
+        for (k = 4; k >= 1; k--) {
+          ctx.globalAlpha = 0.5 - k * 0.1;
+          ctx.fillStyle = k > 2 ? '#ff3a08' : '#ff8020';
+          ctx.beginPath();
+          ctx.arc(px - ux * rad * 0.8 * k, py - uy * rad * 0.8 * k + ((tck + k) % 2) * 2, rad * (1 - k * 0.17), 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 0.3;
+        ctx.fillStyle = '#ffb040';
+        ctx.beginPath(); ctx.arc(px, py, rad + 12, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
+        // Strahlen (8, rotieren alle 3 Ticks um 1/16)
+        var rot = ((tck / 3) | 0) * Math.PI / 8;
+        for (k = 0; k < 8; k++) {
+          var a = rot + k * Math.PI / 4, rl = rad + 6 + (k & 1) * 4;
+          fxQ(R, px + Math.cos(a) * rl, py + Math.sin(a) * rl, k & 1 ? 6 : 8);
+        }
+        fxKontur(ctx, R, '#ffb040');
+        fxKreis(ctx, px, py, rad, pr.farbe || '#ff6a20');
+        ctx.fillStyle = '#ffb040';
+        ctx.beginPath(); ctx.arc(px - 2, py - 2, rad * 0.68, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#fff0c0';
+        ctx.beginPath(); ctx.arc(px - 3, py - 3, rad * 0.36, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#fff8ee';
+        ctx.fillRect(px - 8, py - 9, 6, 6);
+        // Flammenzungen gegen die Flugrichtung
+        ctx.fillStyle = '#ff3a08';
+        for (k = 0; k < 4; k++) {
+          var wob = ((tck + k * 3) % 5) - 2;
+          var fl = 10 + ((tck + k) % 3) * 4 + k * 2;
+          ctx.fillRect(Math.round(px - ux * (rad + 2) - (ux > 0 ? fl : 0)), Math.round(py - 7 + k * 4 + wob), fl, 4);
+        }
+      }
+    }
+    projAlt = list.map(function (p) { return { x: p.x, y: p.y, owner: p.owner, typ: p.typ || 'ball' }; });
   }
 
   function hud(ctx, snap, ich) {
@@ -2235,76 +2553,7 @@
     arena(ctx, snap.tick || 0, snap);
 
     var i;
-    for (i = 0; i < (snap.projektil || []).length; i++) {
-      var pr = snap.projektil[i];
-      var typ = pr.typ || 'ball';
-      var px = pr.x | 0, py = pr.y | 0;
-      var tck = snap.tick || 0;
-      if (typ === 'bodenwelle') {
-        // Lava-Erdstoß: gezackte Feuerwelle + Funken
-        var ww = 72 + ((tck + i) % 3) * 4;
-        ctx.fillStyle = '#5a0800';
-        ctx.fillRect(px - ww / 2, py - 8, ww, 20);
-        ctx.fillStyle = '#ff3a08';
-        for (var zw = -3; zw <= 3; zw++) {
-          var zh = 12 + ((tck + zw + i) % 4) * 4;
-          ctx.fillRect(px + zw * 12, py - zh, 12, zh + 8);
-        }
-        ctx.fillStyle = '#ffb040';
-        ctx.fillRect(px - 16, py - 20, 12, 12);
-        ctx.fillRect(px + 8, py - 28, 8, 16);
-        ctx.fillStyle = '#fff0c0';
-        ctx.fillRect(px - 4, py - 32, 8, 8);
-        ctx.globalAlpha = 0.45;
-        ctx.fillStyle = '#ff4a18';
-        ctx.fillRect(px - ww, py - 4, 24, 8);
-        ctx.globalAlpha = 1;
-      } else if (typ === 'fächer' || typ === 'faecher') {
-        // Rosenmesser / Eis-Kristall-Fächer
-        var spin = ((tck + i * 7) % 8);
-        ctx.fillStyle = '#8a1030';
-        ctx.fillRect(px - 5, py - 1, 10, 3);
-        ctx.fillStyle = '#ff2a4a';
-        ctx.fillRect(px - 4 + (spin % 3), py - 4, 3, 8);
-        ctx.fillRect(px + 1, py - 5, 3, 9);
-        ctx.fillStyle = '#ffe0ee';
-        ctx.fillRect(px - 1, py - 2, 2, 5);
-        // Eis-/Glanzkante
-        ctx.fillStyle = '#a0e8ff';
-        ctx.globalAlpha = 0.7;
-        ctx.fillRect(px + 3, py - 6, 1, 6);
-        ctx.fillRect(px - 5, py - 3, 1, 4);
-        ctx.globalAlpha = 1;
-        // Trail petals
-        ctx.fillStyle = '#ff6080';
-        ctx.globalAlpha = 0.4;
-        ctx.fillRect(px - 10, py - 2, 4, 3);
-        ctx.fillRect(px - 14, py, 3, 2);
-        ctx.globalAlpha = 1;
-      } else {
-        // Feuerball / Sonnenball detailliert
-        var rad = Math.max(5, (pr.w || 10) / 2);
-        ctx.fillStyle = '#5a1000';
-        ctx.beginPath(); ctx.arc(px, py, rad + 2, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = pr.farbe || '#ff6a20';
-        ctx.beginPath(); ctx.arc(px, py, rad, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#ffb040';
-        ctx.beginPath(); ctx.arc(px - 1, py - 1, Math.max(2, rad - 2), 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#fff8ee';
-        ctx.fillRect(px - 1, py - 2, 3, 3);
-        // Flammenzungen
-        ctx.fillStyle = '#ff3a08';
-        var fj;
-        for (fj = 0; fj < 4; fj++) {
-          var ang = ((tck + fj * 3) % 12) - 6;
-          ctx.fillRect(px - rad - 3 - (fj % 2), py - 2 + ang % 5, 4 + fj, 2);
-        }
-        ctx.globalAlpha = 0.35;
-        ctx.fillStyle = '#ff8020';
-        ctx.fillRect(px - rad - 10, py - 2, 8, 4);
-        ctx.globalAlpha = 1;
-      }
-    }
+    zeichneProjektile(ctx, snap);
 
     // Spiegelmatch: gleiche charId → P2 invertieren
     var same = snap.p[0] && snap.p[1] && snap.p[0].charId === snap.p[1].charId;
@@ -2390,7 +2639,7 @@
   }
 
   function resetFx() {
-    fx = []; delayHp = [1, 1]; flash = [0, 0]; prevSnap = null; shake = 0;
+    fx = []; delayHp = [1, 1]; flash = [0, 0]; prevSnap = null; shake = 0; projAlt = [];
   }
 
   Plaza.Render = {
