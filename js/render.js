@@ -1,4 +1,4 @@
-/* Pixel-Canvas v1.0: detaillierte Sprites, Walk/Atk/Hurt, Hölle. */
+/* Pixel-Canvas v1.1: detaillierte Sprites, Walk/Atk/Hurt, Hölle. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -348,6 +348,17 @@
     ctx.fillRect(ox1 + 158 + (vf % 3), 38 - vf * 2, 1, 2);
     ctx.fillRect(ox1 + 60 + vf, 50 - vf, 1, 2);
     drawLayer(ctx, layers.L2, 0.25, tick);
+    // Neon-Schild „PLAZA“ am Turm
+    var ns = Math.round(-camX * 0.25);
+    var glow = (tick % 40) < 28;
+    ctx.fillStyle = glow ? '#ff3a08' : '#801808';
+    ctx.font = 'bold 9px ' + SCHRIFT;
+    ctx.textAlign = 'center';
+    ctx.fillText('PLAZA', 160 + ns, 78);
+    if (glow) {
+      ctx.fillStyle = 'rgba(255,58,8,0.25)';
+      ctx.fillRect(140 + ns, 70, 40, 10);
+    }
     drawLayer(ctx, layers.L3, 0.5, tick);
     // Lava-Brunnen + Fackel-Flammen (animiert)
     var f = ((tick / 5) | 0) % 4;
@@ -397,7 +408,7 @@
     drawLayer(ctx, layers.L5, 1.15, tick);
   }
 
-  /* ---- Figuren (v1.0 detailliert) ---- */
+  /* ---- Figuren (v1.1 detailliert) ---- */
   function schatten(ctx, x, yBoden, w, hoch) {
     var sc = Math.max(0.35, 1 - hoch / 60);
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
@@ -700,14 +711,41 @@
       }
     }
 
-    // Win-Pose
+    // Win-Pose (Arme hoch + Char-Flair)
     if (p._winPose) {
-      rct(ctx, bx - 5, by + 1, 5, 12, accent);
-      rct(ctx, bx + w, by + 1, 5, 12, accent);
-      rct(ctx, bx - 5, by, 5, 2, '#ffb040');
-      rct(ctx, bx + w, by, 5, 2, '#ffb040');
-      rct(ctx, bx + w / 2 - 3, by - 10, 6, 5, '#ffb040');
-      rct(ctx, bx + w / 2 - 2, by - 12, 4, 2, '#ffe080');
+      var wy = by - ((tick / 6) % 2);
+      // Beide Arme hoch
+      rct(ctx, bx - 6, wy + 2, 5, 14, farbe);
+      rct(ctx, bx + w + 1, wy + 2, 5, 14, farbe);
+      rct(ctx, bx - 6, wy, 5, 3, haut);
+      rct(ctx, bx + w + 1, wy, 5, 3, haut);
+      // Funken-Krone
+      rct(ctx, bx + w / 2 - 4, wy - 8, 8, 4, '#ffb040');
+      rct(ctx, bx + w / 2 - 2, wy - 11, 4, 3, '#ffe080');
+      rct(ctx, bx + w / 2 - 5, wy - 6, 2, 2, accent);
+      rct(ctx, bx + w / 2 + 3, wy - 6, 2, 2, accent);
+      if (id === 'toni') { // Amboss hoch
+        rct(ctx, bx + w + 2, wy - 4, 8, 6, '#4a4a4a');
+        rct(ctx, bx + w + 4, wy - 8, 4, 5, '#ff4a18');
+      } else if (id === 'lola') { // Rosen
+        for (var wi = 0; wi < 3; wi++) {
+          rct(ctx, bx - 8 + wi * 6, wy - 4 - (wi % 2), 4, 4, '#ff2a4a');
+        }
+      } else if (id === 'nina') { // Sonnenstrahl
+        rct(ctx, bx + w / 2 - 1, wy - 18, 2, 10, '#ffe080');
+        rct(ctx, bx + w / 2 - 4, wy - 14, 8, 2, '#ffb040');
+      } else if (id === 'biel') { // Pa amb oli
+        rct(ctx, bx - 8, wy + 4, 6, 4, '#e8c090');
+        rct(ctx, bx - 7, wy + 3, 4, 2, '#5ec8b8');
+      } else if (id === 'rocco') { // Faust hoch
+        rct(ctx, bx + w + 2, wy - 2, 7, 8, haut);
+        rct(ctx, bx + w + 3, wy - 4, 5, 3, accent);
+      }
+      // Glow-Ring am Boden
+      ctx.fillStyle = 'rgba(255,176,64,0.35)';
+      ctx.fillRect(x - 18, Plaza.Kampf.BODEN - 2, 36, 4);
+      ctx.fillStyle = 'rgba(255,224,128,0.25)';
+      ctx.fillRect(x - 10, Plaza.Kampf.BODEN - 1, 20, 2);
     }
 
     // ---- Angriff: Arm / Prop / Trail ----
@@ -1037,7 +1075,12 @@
     }
 
     if (snap.phase === 'ende') {
-      ctx.fillStyle = 'rgba(0,0,0,0.78)';
+      // Obere Vignette — Kämpfer / Win-Pose unten sichtbar
+      var grd = ctx.createLinearGradient(0, 0, 0, H);
+      grd.addColorStop(0, 'rgba(0,0,0,0.88)');
+      grd.addColorStop(0.45, 'rgba(0,0,0,0.55)');
+      grd.addColorStop(1, 'rgba(0,0,0,0.15)');
+      ctx.fillStyle = grd;
       ctx.fillRect(0, 0, W, H);
       ctx.textAlign = 'center';
       var won = (ich === 0 || ich === 1) && snap.sieger === ich;
@@ -1045,26 +1088,26 @@
       if (won) {
         ctx.fillStyle = '#40ff80';
         ctx.font = 'bold 22px ' + SCHRIFT;
-        ctx.fillText('GEWONNEN!', W / 2, H / 2 - 28);
+        ctx.fillText('GEWONNEN!', W / 2, 28);
       } else if (lost) {
         ctx.fillStyle = '#ff4040';
         ctx.font = 'bold 22px ' + SCHRIFT;
-        ctx.fillText('VERLOREN!', W / 2, H / 2 - 28);
+        ctx.fillText('VERLOREN!', W / 2, 28);
       }
       ctx.fillStyle = '#ff6020';
-      ctx.font = 'bold 16px ' + SCHRIFT;
-      ctx.fillText(snap.nachricht || 'Ende', W / 2, H / 2 - 6);
+      ctx.font = 'bold 14px ' + SCHRIFT;
+      ctx.fillText(snap.nachricht || 'Ende', W / 2, 48);
       if (snap.sieger != null && snap.p[snap.sieger]) {
         var wc = Plaza.Chars.finde(snap.p[snap.sieger].charId);
         if (wc && wc.winLine) {
           ctx.fillStyle = '#ffb040';
           ctx.font = '10px ' + SCHRIFT;
-          ctx.fillText('„' + wc.winLine + '“', W / 2, H / 2 + 12);
+          ctx.fillText('„' + wc.winLine + '“', W / 2, 62);
         }
       }
       ctx.fillStyle = '#e8c090';
-      ctx.font = '12px ' + SCHRIFT;
-      ctx.fillText('Rematch → Knopf unten', W / 2, H / 2 + 30);
+      ctx.font = '11px ' + SCHRIFT;
+      ctx.fillText('Rematch → Knopf unten', W / 2, 76);
     }
     if (ich === 0 || ich === 1) {
       ctx.fillStyle = 'rgba(232,192,144,0.85)';
@@ -1196,6 +1239,40 @@
     ctx.fillText(text || '', W / 2, H / 2 + 4);
   }
 
+  function portrait(canvas, charId) {
+    if (!canvas) return;
+    var c = Plaza.Chars.finde(charId);
+    if (!c) return;
+    var ctx = canvas.getContext('2d');
+    var s = canvas.width;
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = '#0a0608';
+    ctx.fillRect(0, 0, s, s);
+    // Bust scale ~3x into 48
+    var sc = s / 16;
+    function px(x, y, w, h, col) {
+      ctx.fillStyle = col;
+      ctx.fillRect(Math.round(x * sc), Math.round(y * sc), Math.max(1, Math.round(w * sc)), Math.max(1, Math.round(h * sc)));
+    }
+    px(2, 10, 12, 6, c.farbe2);
+    px(3, 8, 10, 5, c.farbe);
+    px(4, 3, 8, 7, c.haut || '#ffd7b8');
+    px(3, 2, 10, 3, '#0a0810');
+    px(5, 5, 2, 2, c.accent || '#ff6020');
+    px(9, 5, 2, 2, c.accent || '#ff6020');
+    px(6, 7, 4, 1, '#3a2018');
+    // Char accent
+    if (c.id === 'toni') px(12, 6, 3, 5, '#4a4a4a');
+    if (c.id === 'lola') { px(1, 4, 2, 2, '#ff2a4a'); px(13, 5, 2, 2, '#ff2a4a'); }
+    if (c.id === 'nina') px(7, 1, 2, 2, '#ffe080');
+    if (c.id === 'biel') px(0, 9, 3, 2, '#5ec8b8');
+    if (c.id === 'rocco') px(12, 8, 3, 3, c.haut || '#ffd7b8');
+    // Border
+    ctx.strokeStyle = c.accent || '#ff6020';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(1, 1, s - 2, s - 2);
+  }
+
   function banner(r, text) {
     var ctx = r.ctx;
     applyBuf(ctx);
@@ -1214,6 +1291,6 @@
   Plaza.Render = {
     W: W, H: H, puffer: function () { return BUF; },
     erstelle: erstelle, setzePuffer: setzePuffer,
-    zeichne: zeichne, menueHint: menueHint, banner: banner, resetFx: resetFx
+    zeichne: zeichne, menueHint: menueHint, banner: banner, portrait: portrait, resetFx: resetFx
   };
 })(typeof window !== 'undefined' ? window : globalThis);

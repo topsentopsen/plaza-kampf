@@ -1,8 +1,8 @@
-/* Einstieg, Spielschleife, Host/Client-Logik. v1.0 */
+/* Einstieg, Spielschleife, Host/Client-Logik. v1.1 */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION = 'v1.0';
+  var VERSION = 'v1.1';
   Plaza.VERSION = VERSION;
 
   function params() {
@@ -584,7 +584,7 @@
         }
         acc = 0;
       } else if (mode === 'menue') {
-        Plaza.Render.menueHint(render, 'Versus · 2 Handys · v1.0');
+        Plaza.Render.menueHint(render, 'Versus · 2 Handys · v1.1');
         acc = 0;
       } else {
         Plaza.Render.menueHint(render, statusElText());

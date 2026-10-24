@@ -1,4 +1,4 @@
-/* Fünf Plaza-Kämpfer: Stats, Moves, Lore, Look, winLine (v1.0). */
+/* Fünf Plaza-Kämpfer: Stats, Moves, Lore, Look, winLine (v1.1). */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};

@@ -1,4 +1,4 @@
-/* Menü, Charakterwahl, Touch-Steuerung. v1.0 */
+/* Menü, Charakterwahl, Touch-Steuerung. v1.1 */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -63,7 +63,8 @@
           return s;
         }
         var ml = c.moves.light, mh = c.moves.heavy, ms = c.moves.special;
-        b.innerHTML = '<span class="swatch" style="background:' + c.farbe + '"></span>' +
+        b.innerHTML = '<canvas class="char-port" width="48" height="48" aria-hidden="true"></canvas>' +
+          '<span class="swatch" style="background:' + c.farbe + '"></span>' +
           '<strong>' + c.name + '</strong>' +
           '<em class="spitz">' + (c.spitzname || '') + '</em>' +
           '<small class="lore">' + (c.lore || '') + '</small>' +
@@ -82,6 +83,8 @@
           onWahl(c.id);
         });
         box.appendChild(b);
+        var cv = b.querySelector('canvas.char-port');
+        if (cv && Plaza.Render && Plaza.Render.portrait) Plaza.Render.portrait(cv, c.id);
       });
     }
 

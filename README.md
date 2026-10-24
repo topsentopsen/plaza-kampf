@@ -1,4 +1,4 @@
-# Plaza-Kampf v1.0
+# Plaza-Kampf v1.1
 
 Dunkles Versus — *la Pelea del Infierno*. Feuer, Vulkane, ernste Street-Fighter-Chars. Statisches HTML/JS auf GitHub Pages.
 
@@ -93,3 +93,10 @@ Live: https://topsentopsen.github.io/plaza-kampf/
 - Charakterkarten: A/B/C Move-Tips mit Schaden
 - Pad-Tippleiste im Kampf
 - Cache: `?v=1.0`
+
+
+## v1.1 „Showtime“
+- Win-Posen pro Charakter (sichtbar unter Ende-Vignette)
+- Porträt-Canvas auf Charakterkarten
+- Neon-Schild „PLAZA“ in der Arena
+- Cache: `?v=1.1`

@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#050208">
 <meta name="apple-mobile-web-app-title" content="Plaza-Kampf">
-<title>Plaza-Kampf v1.0</title>
+<title>Plaza-Kampf v1.1</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230a0608'/%3E%3Ccircle cx='4' cy='11' r='3' fill='%238a1008'/%3E%3Ccircle cx='12' cy='11' r='3' fill='%23ff3a08'/%3E%3Cpath d='M6 4h4v3H6z' fill='%23ff6020'/%3E%3C/svg%3E">
 <style>
   html, body { margin: 0; width: 100%; height: 100%; height: 100dvh; width: 100dvw;
@@ -129,6 +129,9 @@
   text-shadow:0 1px 2px #000;letter-spacing:.02em}
 .char-card .moves{display:block;margin-top:4px;color:#ffb080;line-height:1.35}
 .char-card .moves b{color:#ffe080;background:#3a1810;padding:0 3px;border-radius:2px;margin-right:1px}
+.char-card{position:relative;padding-left:58px}
+.char-port{position:absolute;left:6px;top:8px;width:48px;height:48px;image-rendering:pixelated;
+  border-radius:4px;background:#0a0608;box-shadow:0 0 0 1px #5a2010}
 #controls{position:relative}
 </style>
 </head>
@@ -136,7 +139,7 @@
 <button type="button" id="mute" data-act="mute" aria-label="Ton aus">🔊</button>
 <div id="ios-hint" role="status"><strong>iPhone:</strong> Safari kann oft kein echtes Vollbild. Quer drehen, Adressleiste wegwischen — oder Teilen → <em>Zum Home-Bildschirm</em> (dann wie App, ohne Browserleiste).<br><button type="button" data-act="ios-hint-ok">Verstanden</button></div>
 <button type="button" id="fs" data-act="fs" aria-label="Vollbild" title="Vollbild">⛶</button>
-<div id="version">Plaza-Kampf v1.0</div>
+<div id="version">Plaza-Kampf v1.1</div>
 <div id="rahmen"><canvas id="spiel" width="320" height="180"></canvas></div>
 <div id="status"></div>
 
@@ -158,7 +161,7 @@
     <div class="row">
       <input id="raum-input" type="text" placeholder="Raum-Code" autocomplete="off" autocapitalize="off" spellcheck="false">
     </div>
-    <p class="hint">v1.0: Move-Tips · Input-Buffer · Combo-Dmg · Light→Special. Hart neu laden (?v=1.0).</p>
+    <p class="hint">v1.1: Win-Posen · Porträts · Plaza-Neon. Hart neu laden (?v=1.1).</p>
   </div>
 
   <div class="screen" data-screen="warte" hidden>
@@ -177,7 +180,7 @@
     </div>
     <p class="hint"><strong>Host:</strong> Code/Link teilen (ohne &amp;host=1).<br>
     <strong>Gast:</strong> Namen tippen → <em>Jetzt beitreten</em>.<br>
-    Beide Handys: dieselbe Version (?v=1.0). iPhone: ⛶ oder „Zum Home-Bildschirm“.</p>
+    Beide Handys: dieselbe Version (?v=1.1). iPhone: ⛶ oder „Zum Home-Bildschirm“.</p>
   </div>
 
   <div class="screen" data-screen="ende" hidden>
@@ -221,13 +224,13 @@
 
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="js/palette.js?v=1.0"></script>
-<script src="js/chars.js?v=1.0"></script>
-<script src="js/kampf.js?v=1.0"></script>
-<script src="js/netz.js?v=1.0"></script>
-<script src="js/sound.js?v=1.0"></script>
-<script src="js/render.js?v=1.0"></script>
-<script src="js/ui.js?v=1.0"></script>
-<script src="js/main.js?v=1.0"></script>
+<script src="js/palette.js?v=1.1"></script>
+<script src="js/chars.js?v=1.1"></script>
+<script src="js/kampf.js?v=1.1"></script>
+<script src="js/netz.js?v=1.1"></script>
+<script src="js/sound.js?v=1.1"></script>
+<script src="js/render.js?v=1.1"></script>
+<script src="js/ui.js?v=1.1"></script>
+<script src="js/main.js?v=1.1"></script>
 </body>
 </html>
