@@ -105,7 +105,10 @@
           onInput(input);
           el.classList.remove('down');
         }
-        el.addEventListener('pointerdown', down);
+        el.addEventListener('pointerdown', function (ev) {
+          try { if (el.setPointerCapture && ev.pointerId != null) el.setPointerCapture(ev.pointerId); } catch (ePc) {}
+          down(ev);
+        });
         el.addEventListener('pointerup', up);
         el.addEventListener('pointerleave', up);
         el.addEventListener('pointercancel', up);

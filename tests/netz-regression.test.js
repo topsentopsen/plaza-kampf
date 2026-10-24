@@ -9,7 +9,7 @@ var ctx = {
   setInterval: function () { return 1; }, clearInterval: function () {},
   setTimeout: function (fn) { return 1; }, clearTimeout: function () {},
   performance: { now: Date.now },
-  location: { href: 'http://localhost/plaza-kampf/?v=2.3', search: '?v=2.3' },
+  location: { href: 'http://localhost/plaza-kampf/?v=2.4', search: '?v=2.4' },
   document: { createElement: function () { return {}; } },
   WebSocket: function () {},
   mqtt: undefined, Peer: undefined
@@ -21,7 +21,7 @@ function load(rel) {
 load('js/netz.js');
 var Plaza = ctx.Plaza;
 assert.ok(Plaza.Netz);
-assert.equal(Plaza.Netz.VERSION_Q, '2.3');
+assert.equal(Plaza.Netz.VERSION_Q, '2.4');
 var link = Plaza.Netz.erstelle({}).gastLink ? null : null;
 // raumIdNeu format
 var id = Plaza.Netz.raumIdNeu();
@@ -34,7 +34,7 @@ var api = Plaza.Netz.erstelle({
 assert.ok(api.gastLink || api.link || typeof api.sende === 'function');
 // gastLink may need host first — check VERSION_Q in module
 var src = fs.readFileSync(path.join(root, 'js/netz.js'), 'utf8');
-assert.ok(src.indexOf("VERSION_Q = '2.3'") !== -1);
+assert.ok(src.indexOf("VERSION_Q = '2.4'") !== -1);
 assert.ok(src.indexOf('&v=') !== -1 || src.indexOf("'&v='") !== -1);
 
 // main.js Rematch-Guard vorhanden
