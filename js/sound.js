@@ -37,6 +37,20 @@
     } catch (e) { ctx = null; return false; }
   }
 
+  
+  var duckUntil = 0;
+  function duckHit(ms) {
+    if (!ctx || !sfxBus) return;
+    try {
+      var t = ctx.currentTime;
+      duckUntil = Math.max(duckUntil, t + (ms || 0.08));
+      sfxBus.gain.cancelScheduledValues(t);
+      sfxBus.gain.setValueAtTime(Math.max(0.2, sfxBus.gain.value), t);
+      sfxBus.gain.linearRampToValueAtTime(0.55, t + 0.02);
+      sfxBus.gain.linearRampToValueAtTime(1, t + (ms || 0.08));
+    } catch (eD) {}
+  }
+
   function resume() {
     if (!ensure()) return;
     try { if (ctx.state === 'suspended') ctx.resume(); } catch (e) {}
@@ -104,7 +118,12 @@
           ton('sawtooth', 600, 60, 0.45, 0.18);
           setTimeout(function () { ton('sine', 523, 523, 0.5, 0.16); ton('sine', 1046, 1046, 0.55, 0.1); }, 280);
           break;
-        case 'win':
+        case 'win': /* winSting v2.5 */
+          ton('square', 523, 784, 0.12, 0.16);
+          setTimeout(function () { ton('square', 659, 988, 0.14, 0.14); }, 90);
+          setTimeout(function () { ton('triangle', 784, 1175, 0.22, 0.12); }, 180);
+          break;
+        case 'win_legacy':
           [330, 370, 415, 494, 587].forEach(function (f, i) {
             setTimeout(function () { ton('triangle', f, f * 1.02, 0.18, 0.14); }, i * 90);
           });
