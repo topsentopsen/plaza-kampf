@@ -1,4 +1,4 @@
-# Plaza-Kampf v0.6
+# Plaza-Kampf v0.7
 
 Dunkles Versus — *la Pelea del Infierno*. Feuer, Vulkane, ernste Street-Fighter-Chars. Statisches HTML/JS auf GitHub Pages.
 
@@ -61,3 +61,10 @@ Live: https://topsentopsen.github.io/plaza-kampf/
 - Endscreen für **beide**: GEWONNEN / VERLOREN + Siegerzeile (Ende-Broadcast-Fix)
 - Querformat: Fullscreen wo möglich, Canvas nutzt fast die ganze Fläche
 - Cache: hart neu laden mit `?v=0.6`
+
+
+## v0.7 „Eingabe & Fullscreen“
+- Sichtbarer Fullscreen-Button ⛶ (nach Drehen tippen)
+- Gast: Namensfeld auf Warte-Screen vor „Jetzt beitreten“
+- Fix: WASD/JKL stehlen keine Buchstaben mehr aus Namensfeldern (Thompson ✓)
+- Cache: `?v=0.7`

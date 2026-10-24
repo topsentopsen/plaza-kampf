@@ -1,4 +1,4 @@
-/* Autoritative Kampfsimulation (läuft auf dem Host). v0.6: Spielernamen. */
+/* Autoritative Kampfsimulation (läuft auf dem Host). v0.7: Spielernamen. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -24,7 +24,7 @@
 
   function sanitizeName(n, fallback) {
     n = (n == null ? '' : String(n)).replace(/[\u0000-\u001f<>]/g, '').trim();
-    if (n.length > 12) n = n.slice(0, 12);
+    if (n.length > 14) n = n.slice(0, 14);
     return n || fallback || 'Spieler';
   }
 

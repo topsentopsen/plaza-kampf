@@ -1,4 +1,4 @@
-/* Menü, Charakterwahl, Touch-Steuerung. */
+/* Menü, Charakterwahl, Touch-Steuerung. v0.7 */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -13,6 +13,7 @@
     var onInput = opts.onInput || function () {};
     var onRetry = opts.onRetry || function () {};
     var onMute = opts.onMute || function () {};
+    var onFullscreen = opts.onFullscreen || function () {};
     var getLink = opts.getLink || function () { return ''; };
 
     var overlay = root.querySelector('#overlay');
@@ -97,6 +98,15 @@
       bind(controls.querySelector('[data-k="c"]'), 'c');
     }
 
+    function typingInField(e) {
+      var t = e.target;
+      if (!t) return false;
+      var tag = (t.tagName || '').toUpperCase();
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+      if (t.isContentEditable) return true;
+      return false;
+    }
+
     function bindKeys() {
       var map = {
         ArrowLeft: 'l', ArrowRight: 'r', ArrowUp: 'u', ArrowDown: 'd',
@@ -104,7 +114,9 @@
         j: 'a', k: 'b', l: 'c',
         KeyJ: 'a', KeyK: 'b', KeyL: 'c'
       };
+      // Nur WASD/JKL als Kampf-Keys — NICHT während Namenseingabe (Bug: „S“ in Thompson)
       window.addEventListener('keydown', function (e) {
+        if (typingInField(e)) return;
         var k = map[e.key] || map[e.code];
         if (!k) return;
         e.preventDefault();
@@ -114,6 +126,7 @@
         }
       });
       window.addEventListener('keyup', function (e) {
+        if (typingInField(e)) return;
         var k = map[e.key] || map[e.code];
         if (!k) return;
         e.preventDefault();
@@ -141,6 +154,11 @@
         var m = onMute();
         muteBtn.textContent = m ? '🔇' : '🔊';
         muteBtn.setAttribute('aria-label', m ? 'Ton an' : 'Ton aus');
+      });
+      var fsBtn = root.querySelector('[data-act="fs"]');
+      if (fsBtn) fsBtn.addEventListener('click', function () {
+        if (Plaza.Sound) Plaza.Sound.init();
+        onFullscreen();
       });
       if (copyBtn) copyBtn.addEventListener('click', function () {
         var link = getLink();

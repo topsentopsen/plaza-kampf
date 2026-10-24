@@ -1,8 +1,8 @@
-/* Einstieg, Spielschleife, Host/Client-Logik. v0.6 */
+/* Einstieg, Spielschleife, Host/Client-Logik. v0.7 */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION = 'v0.6';
+  var VERSION = 'v0.7';
   Plaza.VERSION = VERSION;
 
   function params() {
@@ -36,7 +36,7 @@
     var hostName = '';
     var gastName = '';
     try {
-      meinName = (localStorage.getItem('plazaName') || '').trim().slice(0, 12);
+      meinName = (localStorage.getItem('plazaName') || '').trim().slice(0, 14);
     } catch (e0) {}
 
 
@@ -44,17 +44,53 @@
     function istLandscape() {
       return window.innerWidth > window.innerHeight;
     }
+    function istFullscreen() {
+      return !!(document.fullscreenElement || document.webkitFullscreenElement);
+    }
+    function updateFsButton(ok) {
+      var b = document.querySelector('[data-act="fs"]');
+      if (!b) return;
+      if (ok === true || (ok !== false && istFullscreen())) {
+        b.textContent = '⛶';
+        b.setAttribute('aria-label', 'Vollbild beenden');
+        b.classList.add('aktiv');
+      } else {
+        b.textContent = '⛶';
+        b.setAttribute('aria-label', 'Vollbild');
+        b.classList.remove('aktiv');
+      }
+      // Immer sichtbar; im Landscape/Kampf hervorheben
+      b.classList.toggle('hint-pulse', istLandscape() && !istFullscreen());
+    }
+    function requestFs() {
+      var doc = document.documentElement;
+      if (istFullscreen()) {
+        var exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (exit) try { exit.call(document); } catch (e0) {}
+        updateFsButton(false);
+        return;
+      }
+      var req = doc.requestFullscreen || doc.webkitRequestFullscreen || doc.webkitRequestFullScreen;
+      if (req) {
+        try {
+          var p = req.call(doc);
+          if (p && p.catch) p.catch(function () {
+            ui.setStatus('Vollbild: Handy quer drehen, dann ⛶ tippen (iOS: Browserleiste ggf. manuell wegwischen).');
+          });
+        } catch (e1) {
+          ui.setStatus('Vollbild hier nicht verfügbar — quer drehen nutzt trotzdem mehr Fläche.');
+        }
+      } else {
+        ui.setStatus('iOS: quer drehen + nach oben wischen (Browserleiste). ⛶-Button trotzdem tippen.');
+      }
+      setTimeout(function () { updateFsButton(); _skKey = ''; skalieren(); }, 200);
+    }
     function tryFullscreen() {
       var land = istLandscape();
       document.body.classList.toggle('landscape', land);
       document.body.classList.toggle('landscape-kampf', land && mode === 'kampf');
-      if (!(land && mode === 'kampf')) return;
-      var doc = document.documentElement;
-      var fs = document.fullscreenElement || document.webkitFullscreenElement;
-      if (fs) return;
-      var req = doc.requestFullscreen || doc.webkitRequestFullscreen || doc.webkitRequestFullScreen;
-      if (!req) return;
-      try { var p = req.call(doc); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+      updateFsButton();
+      // Auto-FS nur anbieten, nicht erzwingen — Button ist die Geste
     }
     function skalieren() {
       var ww = window.innerWidth, wh = window.innerHeight;
@@ -104,26 +140,39 @@
     }
 
 
+    function nameFields() {
+      return [
+        document.getElementById('name-input-warte'),
+        document.getElementById('name-input-wahl'),
+        document.getElementById('name-input')
+      ].filter(Boolean);
+    }
     function liesName() {
-      var el = document.getElementById('name-input-wahl') || document.getElementById('name-input');
-      var elMenue = document.getElementById('name-input');
+      var fields = nameFields();
       var n = '';
-      if (el && (el.value || '').trim()) n = (el.value || '').trim();
-      else if (elMenue && (elMenue.value || '').trim()) n = (elMenue.value || '').trim();
-      else n = meinName;
-      n = n.replace(/[<>]/g, '').slice(0, 12);
+      var active = document.activeElement;
+      if (active && fields.indexOf(active) >= 0 && (active.value || '').trim()) {
+        n = (active.value || '').trim();
+      } else {
+        for (var i = 0; i < fields.length; i++) {
+          if ((fields[i].value || '').trim()) { n = fields[i].value.trim(); break; }
+        }
+      }
+      if (!n) n = meinName || '';
+      n = n.replace(/[<>]/g, '').slice(0, 14);
       meinName = n;
       try { if (n) localStorage.setItem('plazaName', n); } catch (e2) {}
-      // sync both fields
-      if (elMenue && n && !elMenue.value) elMenue.value = n;
-      var elW = document.getElementById('name-input-wahl');
-      if (elW && n && !elW.value) elW.value = n;
+      fields.forEach(function (f) { if (n && !(f.value || '').trim()) f.value = n; });
       return n;
+    }
+    function syncNameFields(n) {
+      n = (n || meinName || '').slice(0, 14);
+      nameFields().forEach(function (f) { if (f) f.value = n; });
     }
 
     function setUrl(raum, isHost) {
       try {
-        var q = '?raum=' + encodeURIComponent(raum || '') + '&v=0.6';
+        var q = '?raum=' + encodeURIComponent(raum || '') + '&v=0.7';
         if (isHost) q += '&host=1';
         history.replaceState(null, '', q);
       } catch (e) {}
@@ -167,6 +216,9 @@
         if (!Plaza.Sound) return true;
         Plaza.Sound.init();
         return Plaza.Sound.toggleMute();
+      },
+      onFullscreen: function () {
+        requestFs();
       },
       onWahl: function (id) {
         meinChar = id;
@@ -243,12 +295,18 @@
           var nm = liesName();
           if (netz.istHost()) hostName = nm || hostName;
           else gastName = nm || gastName;
+          syncNameFields(nm);
           ui.fillChars(null);
           ui.showScreen('wahl');
           mode = 'wahl';
           ui.showRetry(false);
           netz.sende({ typ: 'join', seite: seite, name: nm });
           netz.sende({ typ: 'name', seite: seite, name: nm });
+          setTimeout(function () {
+            var nw = document.getElementById('name-input-wahl');
+            if (nw && !nw.value) nw.value = nm || '';
+            if (nw && !(nm || '').trim()) try { nw.focus(); } catch (ef2) {}
+          }, 60);
         } else if (t === 'fehler') {
           var err = extra.err || '';
           var hinweis = extra.hinweis || '';
@@ -283,8 +341,8 @@
         if (!msg || !msg.typ) return;
         if (msg.typ === 'hello' || msg.typ === 'join' || msg.typ === 'name') {
           if (msg.name) {
-            if (msg.seite === 0) hostName = String(msg.name).slice(0, 12);
-            if (msg.seite === 1) gastName = String(msg.name).slice(0, 12);
+            if (msg.seite === 0) hostName = String(msg.name).slice(0, 14);
+            if (msg.seite === 1) gastName = String(msg.name).slice(0, 14);
           }
           if (netz.istHost() && (msg.typ === 'hello' || msg.typ === 'join')) {
             ui.setStatus('Mitspieler da — Charakter wählen');
@@ -294,11 +352,11 @@
         }
         if (msg.typ === 'wahl') {
           if (msg.ver && msg.ver !== VERSION) {
-            ui.setStatus('Andere Version (' + msg.ver + ') — bitte beide hart neu laden (?v=0.6)');
+            ui.setStatus('Andere Version (' + msg.ver + ') — bitte beide hart neu laden (?v=0.7)');
           }
           if (msg.name) {
-            if (msg.seite === 0) hostName = String(msg.name).slice(0, 12);
-            if (msg.seite === 1) gastName = String(msg.name).slice(0, 12);
+            if (msg.seite === 0) hostName = String(msg.name).slice(0, 14);
+            if (msg.seite === 1) gastName = String(msg.name).slice(0, 14);
           }
           if (netz.istHost()) {
             if (msg.seite === 1) gastWahl = msg.charId;
@@ -351,8 +409,13 @@
       pendingRaum = q.raum;
       ui.showScreen('warte');
       ui.showLink('', q.raum);
-      ui.setStatus('Raum ' + q.raum + ' — tippe „Jetzt beitreten“ (wichtig auf dem iPhone).');
+      ui.setStatus('Raum ' + q.raum + ' — zuerst Namen tippen, dann „Jetzt beitreten“.');
       ui.showJoinConfirm(true, q.raum);
+      syncNameFields(meinName);
+      setTimeout(function () {
+        var nw = document.getElementById('name-input-warte');
+        if (nw) try { nw.focus(); } catch (ef) {}
+      }, 80);
     } else {
       ui.showScreen('menue');
       Plaza.Render.menueHint(render, 'Raum erstellen oder beitreten');
@@ -413,7 +476,7 @@
         Plaza.Render.zeichne(render, letzterSnap, seite);
         acc = 0;
       } else if (mode === 'menue') {
-        Plaza.Render.menueHint(render, 'Versus · 2 Handys · v0.6');
+        Plaza.Render.menueHint(render, 'Versus · 2 Handys · v0.7');
         acc = 0;
       } else {
         Plaza.Render.menueHint(render, statusElText());
@@ -435,10 +498,9 @@
       if (mode === 'kampf' && istLandscape()) tryFullscreen();
     }, { passive: true });
     // Prefill name input
-    ['name-input', 'name-input-wahl'].forEach(function (id) {
-      var el = document.getElementById(id);
-      if (el && meinName) el.value = meinName;
-    });
+    syncNameFields(meinName);
+    document.addEventListener('fullscreenchange', function () { updateFsButton(); _skKey = ''; skalieren(); });
+    document.addEventListener('webkitfullscreenchange', function () { updateFsButton(); _skKey = ''; skalieren(); });
     skalieren();
     requestAnimationFrame(loop);
   }

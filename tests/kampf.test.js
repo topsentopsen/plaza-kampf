@@ -68,4 +68,8 @@ assert.ok(st.nachricht.indexOf('gewinnt') !== -1);
 var st2 = Plaza.Kampf.rematch(st);
 assert.equal(st2.p[0].name, 'Tobi');
 
+st = Plaza.Kampf.neu('biel', 'toni', 'Thompson', 'Alex');
+assert.equal(st.p[0].name, 'Thompson');
+assert.ok(st.p[0].name.indexOf('S') !== -1 || st.p[0].name.indexOf('s') !== -1);
+
 console.log('ok — kampf.test.js (snap=' + snapLen + 'B)');
