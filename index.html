@@ -6,7 +6,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Plaza-Kampf v0.7</title>
+<meta name="theme-color" content="#050208">
+<meta name="apple-mobile-web-app-title" content="Plaza-Kampf">
+<title>Plaza-Kampf v0.8</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230a0608'/%3E%3Ccircle cx='4' cy='11' r='3' fill='%238a1008'/%3E%3Ccircle cx='12' cy='11' r='3' fill='%23ff3a08'/%3E%3Cpath d='M6 4h4v3H6z' fill='%23ff6020'/%3E%3C/svg%3E">
 <style>
   html, body { margin: 0; width: 100%; height: 100%; height: 100dvh; width: 100dvw;
@@ -72,9 +74,8 @@
     display: flex; justify-content: space-between; align-items: flex-end;
     padding: 8px 12px calc(10px + env(safe-area-inset-bottom, 0px)); pointer-events: none; }
   #controls[hidden] { display: none !important; }
-  .pad, .actions { display: flex; gap: 10px; pointer-events: auto; }
-  .pad { flex-wrap: wrap; width: calc(var(--pad, 60px) * 2.5); }
-  .actions { flex-direction: column; }
+  .pad, .actions { gap: 10px; pointer-events: auto; }
+  .actions { display: flex; flex-direction: column; }
   .pad button, .actions button { width: var(--pad, 60px); height: var(--pad, 60px); border-radius: 50%;
     font-size: calc(var(--pad, 60px) * 0.34); padding: 0;
     background: #1a1018; color: #e8c090; box-shadow: 0 0 0 3px #000, 0 4px 0 #3a1010; }
@@ -100,12 +101,36 @@
   .name-box { margin: 8px 0 10px; }
   .name-box label { display: block; font-size: 12px; font-weight: 700; color: #ff6020; margin-bottom: 4px; }
   .name-box input { width: 100%; box-sizing: border-box; }
+
+  .pad { display: grid; grid-template-columns: repeat(3, var(--pad, 60px)); grid-template-rows: auto auto;
+    gap: 8px; width: auto; justify-items: center; align-items: center; }
+  .pad button[data-k="l"] { grid-column: 1; grid-row: 1; }
+  .pad button[data-k="u"] { grid-column: 2; grid-row: 1; }
+  .pad button[data-k="r"] { grid-column: 3; grid-row: 1; }
+  .pad button[data-k="d"] { grid-column: 2; grid-row: 2; background: #201018; color: #ffb040; }
+  .actions button[data-k="d"] { background: #201018; }
+  #overlay.ende-mode { align-items: flex-end; background: transparent; }
+  #overlay.ende-mode .screen[data-screen="ende"] {
+    width: min(420px, 96vw); border-radius: 16px 16px 0 0; padding: 14px 16px 18px;
+    background: linear-gradient(180deg, #1a0a10 0%, #120808 100%);
+    box-shadow: 0 -10px 40px rgba(0,0,0,.75); max-height: none; }
+  #overlay.ende-mode .screen[data-screen="ende"] h1 { font-size: 26px; color: #ff6020; }
+  #ios-hint { position: fixed; left: 50%; bottom: calc(12px + env(safe-area-inset-bottom,0px));
+    transform: translateX(-50%); z-index: 9; max-width: min(360px, 92vw);
+    background: #1a0a10; color: #e8c090; border: 2px solid #ff3a08; border-radius: 12px;
+    padding: 10px 12px; font-size: 12px; line-height: 1.35; display: none;
+    box-shadow: 0 6px 24px rgba(0,0,0,.6); }
+  #ios-hint.show { display: block; }
+  #ios-hint button { margin-top: 6px; padding: 8px 12px; font-size: 12px; }
+  html.scroll-lock, html.scroll-lock body { overscroll-behavior: none; overflow: hidden;
+    position: fixed; inset: 0; width: 100%; height: 100%; height: 100dvh; }
 </style>
 </head>
 <body>
 <button type="button" id="mute" data-act="mute" aria-label="Ton aus">🔊</button>
+<div id="ios-hint" role="status"><strong>iPhone:</strong> Safari kann oft kein echtes Vollbild. Quer drehen, Adressleiste wegwischen — oder Teilen → <em>Zum Home-Bildschirm</em> (dann wie App, ohne Browserleiste).<br><button type="button" data-act="ios-hint-ok">Verstanden</button></div>
 <button type="button" id="fs" data-act="fs" aria-label="Vollbild" title="Vollbild">⛶</button>
-<div id="version">Plaza-Kampf v0.7</div>
+<div id="version">Plaza-Kampf v0.8</div>
 <div id="rahmen"><canvas id="spiel" width="320" height="180"></canvas></div>
 <div id="status"></div>
 
@@ -116,7 +141,7 @@
     <p class="hint steps"><strong>1.</strong> Namen tippen · Host: Raum erstellen → Link teilen<br>
     <strong>2.</strong> Gast: Link öffnen → <em>Jetzt beitreten</em><br>
     <strong>3.</strong> Beide Charakter wählen — Kampf startet.<br>
-    <strong>Tipp:</strong> Quer drehen, dann <strong>⛶</strong> tippen (Browserleiste weg).</p>
+    <strong>Tipp:</strong> Quer drehen → <strong>⛶</strong>. iPhone: Safari blockt oft Vollbild — Home-Bildschirm hilft.</p>
     <div class="row">
       <input id="name-input" type="text" placeholder="z.B. Thompson" maxlength="14" autocomplete="nickname" autocapitalize="words" spellcheck="false">
     </div>
@@ -127,7 +152,7 @@
     <div class="row">
       <input id="raum-input" type="text" placeholder="Raum-Code" autocomplete="off" autocapitalize="off" spellcheck="false">
     </div>
-    <p class="hint">v0.7: Fullscreen-Button ⛶ · Gast-Name · Buchstaben-Fix (WASD). Hart neu laden (?v=0.7).</p>
+    <p class="hint">v0.8: Duck · Rematch · iOS-FS · Sprites · Musik · VFX. Hart neu laden (?v=0.8).</p>
   </div>
 
   <div class="screen" data-screen="warte" hidden>
@@ -145,7 +170,16 @@
     </div>
     <p class="hint"><strong>Host:</strong> Code/Link teilen (ohne &amp;host=1).<br>
     <strong>Gast:</strong> Namen tippen → <em>Jetzt beitreten</em>.<br>
-    Beide Handys: dieselbe Version (?v=0.7). Quer: ⛶ Vollbild tippen.</p>
+    Beide Handys: dieselbe Version (?v=0.8). iPhone: ⛶ oder „Zum Home-Bildschirm“.</p>
+  </div>
+
+  <div class="screen" data-screen="ende" hidden>
+    <h1 id="ende-titel">Ende</h1>
+    <p id="ende-text">Kampf vorbei.</p>
+    <div class="row">
+      <button type="button" class="accent" data-act="rematch">Nochmal!</button>
+    </div>
+    <p class="hint">Host startet den Rematch für beide.</p>
   </div>
 
   <div class="screen" data-screen="wahl" hidden>
@@ -164,6 +198,7 @@
     <button type="button" data-k="l" aria-label="Links">◀</button>
     <button type="button" data-k="u" aria-label="Sprung">▲</button>
     <button type="button" data-k="r" aria-label="Rechts">▶</button>
+    <button type="button" data-k="d" aria-label="Duck">▼</button>
   </div>
   <div class="actions">
     <button type="button" data-k="c" aria-label="Spezial">S</button>
@@ -174,13 +209,13 @@
 
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="js/palette.js?v=0.7"></script>
-<script src="js/chars.js?v=0.7"></script>
-<script src="js/kampf.js?v=0.7"></script>
-<script src="js/netz.js?v=0.7"></script>
-<script src="js/sound.js?v=0.7"></script>
-<script src="js/render.js?v=0.7"></script>
-<script src="js/ui.js?v=0.7"></script>
-<script src="js/main.js?v=0.7"></script>
+<script src="js/palette.js?v=0.8"></script>
+<script src="js/chars.js?v=0.8"></script>
+<script src="js/kampf.js?v=0.8"></script>
+<script src="js/netz.js?v=0.8"></script>
+<script src="js/sound.js?v=0.8"></script>
+<script src="js/render.js?v=0.8"></script>
+<script src="js/ui.js?v=0.8"></script>
+<script src="js/main.js?v=0.8"></script>
 </body>
 </html>

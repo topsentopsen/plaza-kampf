@@ -1,4 +1,4 @@
-/* Pixel-Canvas v0.6: Namenschilder, klarer Endscreen Sieg/Niederlage. */
+/* Pixel-Canvas v0.8: detaillierte Sprites, Walk/Atk/Hurt, Hölle. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -397,25 +397,49 @@
     drawLayer(ctx, layers.L5, 1.15, tick);
   }
 
-  /* ---- Figuren-Silhouetten ---- */
+  /* ---- Figuren (v0.8 detailliert) ---- */
   function schatten(ctx, x, yBoden, w, hoch) {
     var sc = Math.max(0.35, 1 - hoch / 60);
-    ctx.fillStyle = 'rgba(0,0,0,0.65)';
-    var rw = Math.max(4, w * 0.55 * sc);
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    var rw = Math.max(5, w * 0.58 * sc);
     ctx.fillRect(Math.round(x - rw), yBoden + 1, Math.round(rw * 2), 3);
-    ctx.fillRect(Math.round(x - rw * 0.7), yBoden + 2, Math.round(rw * 1.4), 2);
+    ctx.fillStyle = 'rgba(40,10,8,0.35)';
+    ctx.fillRect(Math.round(x - rw * 0.75), yBoden + 2, Math.round(rw * 1.5), 2);
+  }
+
+  function hexShade(hex, amt) {
+    if (!hex || hex[0] !== '#' || hex.length < 7) return hex || '#888';
+    var n = parseInt(hex.slice(1), 16);
+    var r = Math.max(0, Math.min(255, ((n >> 16) & 255) + amt));
+    var g = Math.max(0, Math.min(255, ((n >> 8) & 255) + amt));
+    var b = Math.max(0, Math.min(255, (n & 255) + amt));
+    return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+  }
+
+  function rct(ctx, x, y, w, h, fill) {
+    if (w <= 0 || h <= 0) return;
+    ctx.fillStyle = fill;
+    ctx.fillRect(x | 0, y | 0, w | 0, h | 0);
   }
 
   function konturRect(ctx, x, y, w, h, fill, outline) {
-    ctx.fillStyle = fill;
-    ctx.fillRect(x, y, w, h);
+    rct(ctx, x, y, w, h, fill);
     if (outline !== false) {
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(x, y, w, 1);
-      ctx.fillRect(x, y + h - 1, w, 1);
-      ctx.fillRect(x, y, 1, h);
-      ctx.fillRect(x + w - 1, y, 1, h);
+      rct(ctx, x, y, w, 1, '#000');
+      rct(ctx, x, y + h - 1, w, 1, '#000');
+      rct(ctx, x, y, 1, h, '#000');
+      rct(ctx, x + w - 1, y, 1, h, '#000');
     }
+  }
+
+  function bodyBlock(ctx, x, y, w, h, col, ink) {
+    var hi = hexShade(col, 28);
+    var sh = hexShade(col, -32);
+    rct(ctx, x, y, w, h, col);
+    rct(ctx, x + 1, y + 1, Math.max(1, w - 2), 2, hi);
+    rct(ctx, x + 1, y + h - 3, Math.max(1, w - 2), 2, sh);
+    rct(ctx, x, y, 1, h, ink || '#000');
+    rct(ctx, x + w - 1, y, 1, h, ink || '#000');
   }
 
   function fig(ctx, p, blink, invert) {
@@ -424,242 +448,323 @@
     var f = p.facing || 1;
     var h = c.h, w = c.w;
     if (p.crouch) h = Math.floor(c.h * 0.62);
-    // Idle-Atem / Charakter-Mikro (nur stehend, kein atk/stun)
+    var tick = (p._tick | 0);
     var idle = 0, idleX = 0;
+    var moving = Math.abs(p.vx || 0) > 0.15 && p.grounded && !p.crouch && !p.atk && p.stun <= 0;
+    var walk = moving ? (Math.floor(Math.abs(p.x) / 3) + tick) % 4 : 0;
+    var atkF = (p.atk && (p.atk.frame != null)) ? (p.atk.frame | 0) : (p.af | 0);
+
     if (!p.atk && p.stun <= 0 && p.grounded && !p.crouch && !p.blk) {
-      var it = (Date.now() / 140) | 0;
-      idle = (it + p.id * 3) % 2; // 1px Atem
+      var it = (tick / 8) | 0;
+      idle = (it + p.id * 3) % 2;
       y -= idle;
-      // Persönlichkeit
-      if (c.id === 'toni' && (it % 28) < 2) idleX = f; // Hammer-Klopf-Wippe
-      if (c.id === 'nina' && (it % 4) < 2) y -= 1; // Zehenspitzen-Hüpfer
-      if (c.id === 'lola') idleX = ((it % 6) < 3) ? f : 0; // Rock/Fächer
-      if (c.id === 'rocco' && (it % 20) < 3) h = c.h - 1; // Nacken
-      if (c.id === 'biel' && (it % 22) < 2) idleX = -f; // Netz pendelt
+      if (c.id === 'toni' && (it % 28) < 2) idleX = f;
+      if (c.id === 'nina' && (it % 4) < 2) y -= 1;
+      if (c.id === 'lola') idleX = ((it % 6) < 3) ? f : 0;
+      if (c.id === 'rocco' && (it % 20) < 3) h = c.h - 1;
+      if (c.id === 'biel' && (it % 22) < 2) idleX = -f;
       x += idleX;
     }
-    // Win-Pose: Arme hoch / breiter Stand
-    if (p._winPose) {
-      h = c.h;
-      w = c.w + 2;
-    }
+    if (p._winPose) { h = c.h; w = c.w + 2; }
     if (blink && p.invuln > 0 && (p.invuln % 2 === 0)) return;
-    if (flash[p.id] > 0) { /* white flash handled below */ }
 
     var farbe = invert ? c.farbe2 : c.farbe;
     var farbe2 = invert ? c.farbe : c.farbe2;
+    var accent = c.accent || '#ff6020';
     var haut = c.haut || '#ffd7b8';
-    var bob = (!p.atk && p.stun <= 0 && p.grounded && !p.crouch) ? (((Math.floor(x + y) + (p.id || 0)) % 2)) : 0;
-    if (p.stun > 0) bob = 0;
+    var hautD = hexShade(haut, -28);
+    var hautL = hexShade(haut, 22);
+    var ink = '#000000';
+    var id = c.id;
 
     var hoch = Math.max(0, Plaza.Kampf.BODEN - y);
     schatten(ctx, x, Plaza.Kampf.BODEN, w, hoch);
 
     var hurtLean = p.stun > 0 ? -f * 2 : 0;
-    var bx = x - w / 2 + hurtLean;
-    var by = y - h + (bob ? -1 : 0);
-    if (p.stun > 0) by += 1;
+    var atkLean = 0;
+    if (p.atk) {
+      if (atkF < 4) atkLean = -f; // windup back
+      else atkLean = f * 2; // commit forward
+    }
+    var bx = x - w / 2 + hurtLean + atkLean;
+    var by = y - h;
+    if (p.stun > 0) by += 2;
+    if (p.crouch) by += 1;
+
+    // Block-Schild
     if (p.blk) {
-      ctx.fillStyle = '#3a2010';
-      ctx.fillRect(f > 0 ? bx + w - 2 : bx - 4, by + 6, 7, 13);
-      ctx.fillStyle = '#ff6020';
-      ctx.fillRect(f > 0 ? bx + w + 1 : bx - 2, by + 8, 2, 8);
+      rct(ctx, f > 0 ? bx + w - 1 : bx - 5, by + 5, 8, 14, '#2a1810');
+      rct(ctx, f > 0 ? bx + w + 2 : bx - 3, by + 7, 2, 10, accent);
+      rct(ctx, f > 0 ? bx + w + 1 : bx - 4, by + 8, 1, 8, '#ffb040');
     }
 
-    // Body — Street-Fighter-kantig, dunkle Outfits, ernste Silhouette
-    var id = c.id;
-    var ink = '#000000';
-    // Unterkörper / Stance-Beine zuerst (breitere Kampfhaltung)
-    var stance = p.atk ? 3 : (p.crouch ? 1 : 2);
-    ctx.fillStyle = farbe2;
-    ctx.fillRect(bx + 1 - stance, y - 10, 6, 10);
-    ctx.fillRect(bx + w - 7 + stance, y - 10, 6, 10);
-    // Stiefel
-    ctx.fillStyle = ink;
-    ctx.fillRect(bx - stance, y - 3, 8, 3);
-    ctx.fillRect(bx + w - 8 + stance, y - 3, 8, 3);
+    // ---- Beine / Walk ----
+    var stance = p.atk ? 3 : (p.crouch ? 0 : 2);
+    var legLift = 0, legShift = 0;
+    if (moving) {
+      if (walk === 0) { legLift = 3; legShift = f; }
+      else if (walk === 1) { legLift = 0; legShift = f * 2; }
+      else if (walk === 2) { legLift = 3; legShift = -f; }
+      else { legLift = 0; legShift = -f * 2; }
+    }
+    if (p.crouch) {
+      stance = 4;
+      rct(ctx, bx + 1 - stance, y - 8, 7, 8, farbe2);
+      rct(ctx, bx + w - 8 + stance, y - 8, 7, 8, farbe2);
+      rct(ctx, bx - stance, y - 3, 9, 3, ink);
+      rct(ctx, bx + w - 9 + stance, y - 3, 9, 3, ink);
+    } else if (!p.grounded) {
+      // Air: tucked legs
+      rct(ctx, bx + 2, y - 12, 5, 8, farbe2);
+      rct(ctx, bx + w - 7, y - 10, 5, 7, farbe2);
+      rct(ctx, bx + 1, y - 5, 7, 3, ink);
+      rct(ctx, bx + w - 8, y - 4, 7, 3, ink);
+    } else {
+      // Front / back leg
+      rct(ctx, bx + 1 - stance + legShift, y - 11 - (walk === 0 || walk === 2 ? legLift : 0), 6, 11, farbe2);
+      rct(ctx, bx + w - 7 + stance - legShift, y - 11 - (walk === 1 || walk === 3 ? 2 : 0), 6, 11, hexShade(farbe2, -18));
+      // Knee highlight
+      rct(ctx, bx + 2 - stance + legShift, y - 8, 3, 2, hexShade(farbe2, 20));
+      // Boots
+      rct(ctx, bx - stance + legShift, y - 3, 9, 3, ink);
+      rct(ctx, bx + w - 9 + stance - legShift, y - 3, 9, 3, ink);
+      rct(ctx, bx - stance + 1 + legShift, y - 2, 3, 1, hexShade(farbe, 10));
+    }
+
+    // ---- Torso / Kopf je Charakter ----
+    var headY = by - 1;
+    var torsoH = h - 14;
 
     if (id === 'toni') {
-      // Tank: breite Schultern, Lederschürze, Amboss-Armbänder
-      konturRect(ctx, bx - 1, by + 8, w + 2, h - 14, farbe);
-      konturRect(ctx, bx - 3, by + 8, w + 6, 7, farbe2, false); // Schulterpanzer
-      ctx.fillStyle = '#2a1810';
-      ctx.fillRect(bx + 2, by + 14, w - 4, 9); // Schürze
-      ctx.fillStyle = ink;
-      ctx.fillRect(bx + 3, by + 16, w - 6, 1);
-      konturRect(ctx, bx + 3, by - 1, w - 6, 11, haut);
-      // harter Kiefer / Schnurrbart
-      ctx.fillStyle = '#1a1010';
-      ctx.fillRect(bx + 5, by + 6, w - 10, 3);
-      ctx.fillRect(bx + 4, by + 5, 2, 2);
-      ctx.fillRect(bx + w - 6, by + 5, 2, 2);
-      // Narben
-      ctx.fillStyle = '#5a2010';
-      ctx.fillRect(bx + w - 7, by + 2, 3, 1);
-      // Hammer
-      ctx.fillStyle = '#3a3a3a';
-      ctx.fillRect(f > 0 ? bx + w : bx - 5, by + 12, 5, 10);
-      ctx.fillStyle = '#6a6a6a';
-      ctx.fillRect(f > 0 ? bx + w - 2 : bx - 7, by + 11, 9, 4);
-    } else if (id === 'lola') {
-      // Kampf-Tänzerin: enges Top, zerrissener Rock, scharfe Haltung
-      konturRect(ctx, bx + 1, by + 8, w - 2, 9, farbe);
-      ctx.fillStyle = farbe2;
-      ctx.fillRect(bx - 1, by + 16, w + 2, 3);
-      ctx.fillRect(bx - 2, by + 19, 5, 6);
-      ctx.fillRect(bx + w - 3, by + 19, 5, 6);
-      konturRect(ctx, bx + 2, by - 1, w - 4, 10, haut);
-      // scharfes Haar / Dutt + Stachel
-      ctx.fillStyle = '#1a0810';
-      ctx.fillRect(bx + 3, by - 5, w - 6, 5);
-      ctx.fillRect(f > 0 ? bx + w - 2 : bx - 2, by - 2, 4, 8);
-      ctx.fillStyle = '#ff2a4a';
-      ctx.fillRect(bx + (f > 0 ? w - 4 : 2), by - 4, 3, 3); // Blutrose
+      // Schmied: breite Schultern, Lederschürze, Amboss-Armreifen, Narben
+      bodyBlock(ctx, bx - 1, by + 8, w + 2, torsoH, farbe, ink);
+      bodyBlock(ctx, bx - 4, by + 7, w + 8, 8, farbe2, ink); // Schulterpanzer
+      rct(ctx, bx - 3, by + 8, w + 6, 2, hexShade(farbe2, 24));
+      // Lederschürze + Nieten
+      rct(ctx, bx + 2, by + 15, w - 4, 11, '#2a1810');
+      rct(ctx, bx + 3, by + 16, w - 6, 1, '#4a3020');
+      rct(ctx, bx + 4, by + 18, 2, 2, '#8a6840');
+      rct(ctx, bx + w - 6, by + 18, 2, 2, '#8a6840');
+      // Kopf
+      bodyBlock(ctx, bx + 3, headY, w - 6, 12, haut, ink);
+      rct(ctx, bx + 4, headY + 1, w - 8, 2, hautL);
+      rct(ctx, bx + 4, headY + 8, w - 8, 3, hautD); // Kiefer
+      // Schnurrbart + Brauen
+      rct(ctx, bx + 5, headY + 7, w - 10, 3, '#1a1010');
+      rct(ctx, bx + 4, headY + 6, 3, 2, '#1a1010');
+      rct(ctx, bx + w - 7, headY + 6, 3, 2, '#1a1010');
+      rct(ctx, bx + 5, headY + 2, 3, 1, '#1a1010');
+      rct(ctx, bx + w - 8, headY + 2, 3, 1, '#1a1010');
+      // Narbe
+      rct(ctx, bx + w - 8, headY + 3, 4, 1, '#5a2010');
       // Armreifen
-      ctx.fillStyle = '#ffb040';
-      ctx.fillRect(f > 0 ? bx + w - 1 : bx - 2, by + 12, 3, 2);
-    } else if (id === 'rocco') {
-      // Grappler: Bomberjacke, breiter Nacken, dunkle Brille
-      konturRect(ctx, bx - 1, by + 7, w + 2, h - 12, farbe);
-      konturRect(ctx, bx - 3, by + 7, w + 6, 8, farbe2, false);
-      ctx.fillStyle = ink;
-      ctx.fillRect(bx + 2, by + 14, w - 4, 2); // Reißverschluss
-      konturRect(ctx, bx + 2, by - 1, w - 4, 10, haut);
-      // Stiernacken
-      ctx.fillStyle = haut;
-      ctx.fillRect(bx + 4, by + 8, w - 8, 4);
-      // schwarze Brille
-      ctx.fillStyle = ink;
-      ctx.fillRect(bx + 3, by + 2, w - 6, 4);
-      ctx.fillStyle = '#4a4a4a';
-      ctx.fillRect(bx + 4, by + 3, 4, 2);
-      ctx.fillRect(bx + w - 8, by + 3, 4, 2);
-      // Faustbandagen
-      ctx.fillStyle = '#5a2010';
-      ctx.fillRect(f > 0 ? bx + w : bx - 3, by + 14, 4, 5);
-    } else if (id === 'nina') {
-      // Rushdown: Kapuze, Maske, scharfe Schulter, Roller-Pads
-      konturRect(ctx, bx, by + 7, w, h - 12, farbe);
-      ctx.fillStyle = farbe2;
-      ctx.fillRect(bx - 1, by + 7, w + 2, 5); // Schulterplatte
-      konturRect(ctx, bx + 2, by, w - 4, 9, haut);
-      // Kapuze
-      ctx.fillStyle = '#0a0810';
-      ctx.fillRect(bx + 1, by - 4, w - 2, 6);
-      ctx.fillRect(bx, by, 3, 8);
-      ctx.fillRect(bx + w - 3, by, 3, 8);
-      // Visier / Maskenstreifen
-      ctx.fillStyle = '#ffb040';
-      ctx.fillRect(bx + 4, by + 3, w - 8, 2);
-      // Schal / Kabel
-      ctx.fillStyle = '#2a6058';
-      ctx.fillRect(bx + 2, by + 9, w - 4, 2);
-      ctx.fillRect(f > 0 ? bx + w - 1 : bx - 5, by + 10, 6, 7);
-      // Kniepads
-      ctx.fillStyle = ink;
-      ctx.fillRect(bx + 2, y - 8, 5, 3);
-      ctx.fillRect(bx + w - 7, y - 8, 5, 3);
-    } else {
-      // Biel — dunkler Fischer-Kämpfer: Kapuzenpulli, Seil, Narbenbart
-      konturRect(ctx, bx, by + 7, w, h - 12, farbe);
-      konturRect(ctx, bx - 2, by + 8, w + 4, 6, farbe2, false);
-      konturRect(ctx, bx + 2, by - 1, w - 4, 10, haut);
-      // Kapuze / Mütze tief
-      ctx.fillStyle = '#0a1818';
-      ctx.fillRect(bx + 1, by - 4, w - 2, 6);
-      ctx.fillRect(bx, by + 1, w, 2);
-      // harter Bart
-      ctx.fillStyle = '#1a1010';
-      ctx.fillRect(bx + 4, by + 6, w - 8, 3);
-      // Seil/Netz über Brust
-      ctx.fillStyle = '#5a3a20';
-      ctx.fillRect(bx + 2, by + 12, w - 4, 2);
-      ctx.fillRect(f > 0 ? bx - 3 : bx + w, by + 10, 4, 12);
-      ctx.fillStyle = '#8a6040';
-      ctx.fillRect(f > 0 ? bx - 2 : bx + w + 1, by + 12, 2, 2);
-      ctx.fillRect(f > 0 ? bx - 2 : bx + w + 1, by + 17, 2, 2);
-    }
-
-        // Win-Pose Arms
-    if (p._winPose) {
-      ctx.fillStyle = c.accent || '#ff6020';
-      ctx.fillRect(bx - 4, by + 2, 4, 10);
-      ctx.fillRect(bx + w, by + 2, 4, 10);
-      ctx.fillStyle = '#ffb040';
-      ctx.fillRect(bx + w / 2 - 2, by - 8, 4, 4); // Funke/Pokal-Pixel
-    }
-
-    // Augen
-    ctx.fillStyle = p.stun > 0 ? '#5a2010' : '#ffb040';
-    if (p.stun > 0) {
-      // X eyes
-      if (f > 0) {
-        ctx.fillRect(bx + w - 9, by + 3, 3, 1);
-        ctx.fillRect(bx + w - 13, by + 3, 3, 1);
-      } else {
-        ctx.fillRect(bx + 6, by + 3, 3, 1);
-        ctx.fillRect(bx + 10, by + 3, 3, 1);
+      rct(ctx, f > 0 ? bx + w + 1 : bx - 5, by + 14, 5, 6, '#3a3a3a');
+      rct(ctx, f > 0 ? bx + w + 2 : bx - 4, by + 15, 3, 1, '#8a8a8a');
+      // Hammer (Idle an Hüfte / Atk vorne)
+      if (!p.atk) {
+        rct(ctx, f > 0 ? bx + w : bx - 6, by + 12, 5, 12, '#3a3a3a');
+        rct(ctx, f > 0 ? bx + w - 2 : bx - 8, by + 11, 9, 4, '#6a6a6a');
+        rct(ctx, f > 0 ? bx + w : bx - 6, by + 12, 5, 1, '#9a9a9a');
       }
-    } else if (f > 0) {
-      ctx.fillRect(bx + w - 8, by + 3, 2, 2);
-      ctx.fillRect(bx + w - 12, by + 3, 2, 2);
+    } else if (id === 'lola') {
+      // Flamenco-Kämpferin: Korsett, Rock-Lagen, Blutrose, Armreif
+      bodyBlock(ctx, bx + 1, by + 8, w - 2, 10, farbe, ink);
+      rct(ctx, bx + 2, by + 9, w - 4, 2, hexShade(farbe, 30));
+      // Korsett-Schnürung
+      rct(ctx, bx + w / 2 - 1, by + 10, 2, 7, accent);
+      // Rock Lagen
+      rct(ctx, bx - 2, by + 17, w + 4, 3, farbe2);
+      rct(ctx, bx - 3, by + 20, 6, 7, farbe);
+      rct(ctx, bx + w - 3, by + 20, 6, 7, farbe);
+      rct(ctx, bx - 1, by + 22, w + 2, 2, hexShade(farbe2, -20));
+      // Idle Rock-Swing
+      if (idleX) rct(ctx, bx + (f > 0 ? w : -3), by + 19, 4, 5, farbe2);
+      // Kopf
+      bodyBlock(ctx, bx + 2, headY, w - 4, 11, haut, ink);
+      rct(ctx, bx + 3, headY + 1, w - 6, 2, hautL);
+      // Haar / Dutt + Stachel
+      rct(ctx, bx + 2, headY - 5, w - 4, 6, '#1a0810');
+      rct(ctx, bx + 3, headY - 6, w - 6, 2, '#2a1020');
+      rct(ctx, f > 0 ? bx + w - 2 : bx - 3, headY - 2, 5, 10, '#1a0810');
+      rct(ctx, f > 0 ? bx + w + 1 : bx - 4, headY + 2, 2, 6, '#0a0408');
+      // Blutrose
+      rct(ctx, bx + (f > 0 ? w - 5 : 2), headY - 4, 4, 4, '#ff2a4a');
+      rct(ctx, bx + (f > 0 ? w - 4 : 3), headY - 3, 2, 2, '#ff8090');
+      // Lippen
+      rct(ctx, bx + w / 2 - 2, headY + 7, 4, 1, '#c02040');
+      // Armreif
+      rct(ctx, f > 0 ? bx + w - 1 : bx - 3, by + 12, 4, 2, '#ffb040');
+      rct(ctx, f > 0 ? bx + w : bx - 2, by + 12, 2, 2, '#fff0c0');
+    } else if (id === 'rocco') {
+      // Türsteher: Bomberjacke, Pelzkragen, Brille, Bandagen
+      bodyBlock(ctx, bx - 1, by + 7, w + 2, torsoH + 1, farbe, ink);
+      bodyBlock(ctx, bx - 3, by + 6, w + 6, 9, farbe2, ink);
+      rct(ctx, bx - 2, by + 7, w + 4, 2, hexShade(farbe2, 20));
+      // Reißverschluss + Taschen
+      rct(ctx, bx + w / 2 - 1, by + 12, 2, 12, ink);
+      rct(ctx, bx + 3, by + 16, 4, 3, '#1a1018');
+      rct(ctx, bx + w - 7, by + 16, 4, 3, '#1a1018');
+      // Pelzkragen
+      rct(ctx, bx, by + 6, w, 3, '#3a2a40');
+      rct(ctx, bx + 1, by + 6, 2, 2, '#5a4a60');
+      // Kopf + Stiernacken
+      bodyBlock(ctx, bx + 2, headY, w - 4, 11, haut, ink);
+      rct(ctx, bx + 4, headY + 9, w - 8, 4, hautD);
+      rct(ctx, bx + 3, headY + 1, w - 6, 2, hautL);
+      // Kurzhaar
+      rct(ctx, bx + 2, headY - 2, w - 4, 3, '#0a0810');
+      // Brille
+      rct(ctx, bx + 3, headY + 2, w - 6, 4, ink);
+      rct(ctx, bx + 4, headY + 3, 4, 2, '#5a5a6a');
+      rct(ctx, bx + w - 8, headY + 3, 4, 2, '#5a5a6a');
+      rct(ctx, bx + w / 2 - 1, headY + 3, 2, 1, '#8a8a9a');
+      // Bandagen
+      rct(ctx, f > 0 ? bx + w : bx - 4, by + 14, 5, 6, '#5a2010');
+      rct(ctx, f > 0 ? bx + w + 1 : bx - 3, by + 15, 3, 1, '#8a4030');
+    } else if (id === 'nina') {
+      // Kurierin: Kapuze, Visier, Schal, Pads, scharfe Silhouette
+      bodyBlock(ctx, bx, by + 7, w, torsoH, farbe, ink);
+      bodyBlock(ctx, bx - 2, by + 6, w + 4, 6, farbe2, ink);
+      rct(ctx, bx - 1, by + 7, w + 2, 2, hexShade(farbe2, 26));
+      // Gürtel / Mag-Pouch
+      rct(ctx, bx + 1, by + 16, w - 2, 3, '#1a1008');
+      rct(ctx, bx + 3, by + 16, 3, 3, accent);
+      // Kopf
+      bodyBlock(ctx, bx + 2, headY + 1, w - 4, 10, haut, ink);
+      // Kapuze
+      rct(ctx, bx + 1, headY - 4, w - 2, 7, '#0a0810');
+      rct(ctx, bx, headY, 3, 9, '#0a0810');
+      rct(ctx, bx + w - 3, headY, 3, 9, '#0a0810');
+      rct(ctx, bx + 2, headY - 3, w - 4, 2, '#1a1420');
+      // Visier
+      rct(ctx, bx + 4, headY + 3, w - 8, 3, '#ffb040');
+      rct(ctx, bx + 5, headY + 4, w - 10, 1, '#fff0c0');
+      // Schal / Kabel
+      rct(ctx, bx + 2, by + 9, w - 4, 2, '#2a6058');
+      rct(ctx, f > 0 ? bx + w - 1 : bx - 6, by + 10, 7, 8, '#2a6058');
+      rct(ctx, f > 0 ? bx + w + 1 : bx - 4, by + 12, 2, 2, '#40a090');
+      // Kniepads
+      rct(ctx, bx + 2, y - 9, 5, 4, ink);
+      rct(ctx, bx + w - 7, y - 9, 5, 4, ink);
+      rct(ctx, bx + 3, y - 8, 3, 1, accent);
     } else {
-      ctx.fillRect(bx + 6, by + 3, 2, 2);
-      ctx.fillRect(bx + 10, by + 3, 2, 2);
+      // Biel — Fischer: Kapuze, Seil, Netz, Bart, Narben
+      bodyBlock(ctx, bx, by + 7, w, torsoH, farbe, ink);
+      bodyBlock(ctx, bx - 2, by + 7, w + 4, 7, farbe2, ink);
+      rct(ctx, bx - 1, by + 8, w + 2, 2, hexShade(farbe2, 22));
+      // Seil über Brust
+      rct(ctx, bx + 2, by + 12, w - 4, 2, '#5a3a20');
+      rct(ctx, bx + 3, by + 13, w - 6, 1, '#8a6040');
+      // Kopf
+      bodyBlock(ctx, bx + 2, headY, w - 4, 11, haut, ink);
+      rct(ctx, bx + 3, headY + 1, w - 6, 2, hautL);
+      // Mütze / Kapuze tief
+      rct(ctx, bx + 1, headY - 4, w - 2, 6, '#0a1818');
+      rct(ctx, bx, headY + 1, w, 2, '#0a1818');
+      rct(ctx, bx + 2, headY - 3, w - 4, 2, '#143028');
+      // Bart
+      rct(ctx, bx + 4, headY + 7, w - 8, 3, '#1a1010');
+      rct(ctx, bx + 5, headY + 9, w - 10, 2, '#0a0808');
+      // Narbe Wange
+      rct(ctx, f > 0 ? bx + w - 7 : bx + 4, headY + 4, 3, 1, '#5a2010');
+      // Netz-Prop
+      rct(ctx, f > 0 ? bx - 4 : bx + w, by + 10, 4, 13, '#3a2010');
+      rct(ctx, f > 0 ? bx - 3 : bx + w + 1, by + 12, 2, 2, '#5ec8b8');
+      rct(ctx, f > 0 ? bx - 3 : bx + w + 1, by + 16, 2, 2, '#5ec8b8');
+      rct(ctx, f > 0 ? bx - 3 : bx + w + 1, by + 20, 2, 2, '#5ec8b8');
     }
 
-    // Angriffs-Arm / Prop
+    // Augen (über Körper)
+    var eyeY = headY + 3;
+    if (p.stun > 0) {
+      ctx.fillStyle = '#5a2010';
+      if (f > 0) {
+        rct(ctx, bx + w - 9, eyeY, 3, 1, '#5a2010');
+        rct(ctx, bx + w - 13, eyeY, 3, 1, '#5a2010');
+        rct(ctx, bx + w - 8, eyeY - 1, 1, 3, '#5a2010');
+        rct(ctx, bx + w - 12, eyeY - 1, 1, 3, '#5a2010');
+      } else {
+        rct(ctx, bx + 6, eyeY, 3, 1, '#5a2010');
+        rct(ctx, bx + 10, eyeY, 3, 1, '#5a2010');
+      }
+    } else {
+      var ec = p.blk ? '#ffe080' : '#ffb040';
+      if (f > 0) {
+        rct(ctx, bx + w - 8, eyeY, 2, 2, ec);
+        rct(ctx, bx + w - 12, eyeY, 2, 2, ec);
+        rct(ctx, bx + w - 7, eyeY, 1, 1, '#fff8ee');
+      } else {
+        rct(ctx, bx + 6, eyeY, 2, 2, ec);
+        rct(ctx, bx + 10, eyeY, 2, 2, ec);
+        rct(ctx, bx + 6, eyeY, 1, 1, '#fff8ee');
+      }
+    }
+
+    // Win-Pose
+    if (p._winPose) {
+      rct(ctx, bx - 5, by + 1, 5, 12, accent);
+      rct(ctx, bx + w, by + 1, 5, 12, accent);
+      rct(ctx, bx - 5, by, 5, 2, '#ffb040');
+      rct(ctx, bx + w, by, 5, 2, '#ffb040');
+      rct(ctx, bx + w / 2 - 3, by - 10, 6, 5, '#ffb040');
+      rct(ctx, bx + w / 2 - 2, by - 12, 4, 2, '#ffe080');
+    }
+
+    // ---- Angriff: Arm / Prop / Trail ----
     if (p.atk) {
       var mv = c.moves[p.atk.art];
-      var reach = Math.min(mv.reach, 40);
-      var armW = Math.max(8, Math.floor(reach * 0.42));
+      var reach = Math.min(mv.reach, 42);
+      var armW = Math.max(8, Math.floor(reach * (atkF < mv.startup ? 0.25 : 0.48)));
       var armY = y - (mv.high || 14) - 4;
+      var punchCol = accent;
       if (p.atk.art === 'special' && id === 'lola') {
-        ctx.fillStyle = '#ff2a4a';
-        for (var ri = 0; ri < 3; ri++) {
-          var rx = x + f * (10 + ri * 6);
-          ctx.fillRect(rx, armY - 2 + ri * 3, 4, 4);
+        for (var ri = 0; ri < 4; ri++) {
+          var rx = x + f * (8 + ri * 5 + (atkF % 3));
+          rct(ctx, rx, armY - 1 + ri * 2, 5, 5, '#ff2a4a');
+          rct(ctx, rx + 1, armY + ri * 2, 2, 2, '#ff8090');
         }
       } else if (p.atk.art === 'special' && id === 'toni') {
-        ctx.fillStyle = '#4a4a4a';
-        ctx.fillRect(f > 0 ? x + 4 : x - armW - 4, armY, armW, 6);
-        ctx.fillStyle = '#ff4a18';
-        ctx.fillRect(f > 0 ? x + armW : x - armW - 2, armY - 4, 4, 14);
+        rct(ctx, f > 0 ? x + 4 : x - armW - 4, armY, armW, 7, '#4a4a4a');
+        rct(ctx, f > 0 ? x + armW : x - armW - 3, armY - 5, 5, 16, '#ff4a18');
+        rct(ctx, f > 0 ? x + armW + 1 : x - armW - 2, armY - 3, 3, 4, '#ffb040');
       } else if (p.atk.art === 'special' && id === 'biel') {
-        ctx.fillStyle = '#3a2010';
-        ctx.fillRect(f > 0 ? x + 6 : x - 18, armY, 14, 6);
-        ctx.fillStyle = '#5ec8b8';
-        ctx.fillRect(f > 0 ? x + 8 : x - 16, armY + 1, 4, 4);
+        rct(ctx, f > 0 ? x + 6 : x - 20, armY - 1, 16, 8, '#3a2010');
+        for (var ni = 0; ni < 3; ni++) {
+          rct(ctx, f > 0 ? x + 8 + ni * 4 : x - 18 + ni * 4, armY + 1, 3, 3, '#5ec8b8');
+        }
+      } else if (p.atk.art === 'heavy') {
+        rct(ctx, f > 0 ? x + 4 : x - 4 - armW, armY - 1, armW, 8, punchCol);
+        rct(ctx, f > 0 ? x + 4 : x - 4 - armW, armY, Math.floor(armW * 0.4), 6, hexShade(punchCol, 40));
+        // Impact fist
+        rct(ctx, f > 0 ? x + armW + 2 : x - armW - 6, armY - 2, 6, 10, haut);
       } else {
-        ctx.fillStyle = c.accent;
-        if (f > 0) ctx.fillRect(x + 4, armY, armW, 6);
-        else ctx.fillRect(x - 4 - armW, armY, armW, 6);
-        // Feuer-Trail
-        ctx.fillStyle = '#ff4a18';
-        ctx.globalAlpha = 0.5;
-        if (f > 0) ctx.fillRect(x + 2, armY - 1, 4, 8);
-        else ctx.fillRect(x - 6, armY - 1, 4, 8);
-        ctx.globalAlpha = 1;
+        rct(ctx, f > 0 ? x + 4 : x - 4 - armW, armY, armW, 6, punchCol);
+        rct(ctx, f > 0 ? x + 4 : x - 4 - armW, armY + 1, Math.floor(armW * 0.35), 3, hexShade(punchCol, 35));
       }
-      // Trail
-      ctx.fillStyle = farbe;
+      // Motion trail
       ctx.globalAlpha = 0.35;
-      if (f > 0) ctx.fillRect(x + 2, armY + 1, Math.floor(armW * 0.6), 3);
-      else ctx.fillRect(x - 2 - Math.floor(armW * 0.6), armY + 1, Math.floor(armW * 0.6), 3);
+      rct(ctx, f > 0 ? x + 1 : x - Math.floor(armW * 0.5) - 1, armY + 1, Math.floor(armW * 0.55), 4, farbe);
+      ctx.globalAlpha = 0.5;
+      rct(ctx, f > 0 ? x + 2 : x - 6, armY - 1, 4, 8, '#ff4a18');
       ctx.globalAlpha = 1;
-    } else {
-      ctx.fillStyle = farbe;
-      if (f > 0) ctx.fillRect(x + w / 2 - 2, y - 18, 6, 4);
-      else ctx.fillRect(x - w / 2 - 4, y - 18, 6, 4);
+    } else if (!p.crouch) {
+      // Ruhe-Arm
+      rct(ctx, f > 0 ? x + w / 2 - 1 : x - w / 2 - 4, y - 18, 5, 5, farbe);
+      rct(ctx, f > 0 ? x + w / 2 : x - w / 2 - 3, y - 17, 3, 2, haut);
     }
 
-    // White flash
+    // Hurt flash overlay
     if (flash[p.id] > 0) {
-      ctx.fillStyle = 'rgba(255,80,20,0.45)';
-      ctx.fillRect(bx - 1, by - 2, w + 2, h + 2);
+      ctx.fillStyle = 'rgba(255,80,20,0.4)';
+      ctx.fillRect(bx - 2, by - 3, w + 4, h + 4);
+    }
+    // Stun wobble lines
+    if (p.stun > 0 && (tick % 4) < 2) {
+      rct(ctx, bx + w / 2 - 1, by - 6, 2, 3, '#ffe080');
+      rct(ctx, bx + w / 2 + 3, by - 5, 2, 2, '#ffb040');
+      rct(ctx, bx + w / 2 - 4, by - 5, 2, 2, '#ffb040');
     }
 
-    // P2 marker bei Invert
     if (invert) {
       ctx.fillStyle = '#ffd36e';
       ctx.font = 'bold 7px ' + SCHRIFT;
@@ -694,9 +799,15 @@
             spawnFx('spark', b.x, b.y - 16, col);
             spawnFx('spark', b.x + 5, b.y - 20, '#fff0c0');
             spawnFx('ember', b.x - 3, b.y - 12, '#ff6020');
+            if (kind === 'special' || (b.hitKind === 'special')) {
+              spawnFx('fireball', b.x + 4, b.y - 18, col);
+              spawnFx('ice', b.x - 6, b.y - 14, '#80d8ff');
+              spawnFx('knife', b.x, b.y - 20, '#ff2a4a');
+            }
             if (a.hp - b.hp >= 10 || kind === 'heavy') {
               spawnFx('slash', b.x, b.y - 18, col);
               spawnFx('spark', b.x - 4, b.y - 22, '#fff8ee');
+              spawnFx('fireball', b.x, b.y - 22, col);
             }
           }
         }
@@ -770,6 +881,30 @@
         ctx.fillRect(e.x - 9, e.y + 6, 18, 2);
         ctx.fillRect(e.x - 9, e.y - 12, 2, 20);
         ctx.fillRect(e.x + 7, e.y - 12, 2, 20);
+        ctx.globalAlpha = 1;
+      } else if (e.kind === 'fireball') {
+        if (e.t > 10) { fx.splice(i, 1); continue; }
+        var fr = 6 - e.t * 0.4;
+        ctx.fillStyle = '#ff3a08';
+        ctx.beginPath(); ctx.arc(e.x, e.y - e.t, fr, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#ffb040';
+        ctx.fillRect(e.x - 2, e.y - e.t - 2, 4, 4);
+      } else if (e.kind === 'ice') {
+        if (e.t > 9) { fx.splice(i, 1); continue; }
+        ctx.globalAlpha = 1 - e.t / 9;
+        ctx.fillStyle = '#80d8ff';
+        ctx.fillRect(e.x - 1 - e.t, e.y - 6, 2, 12);
+        ctx.fillRect(e.x - 6, e.y - 1, 12, 2);
+        ctx.fillStyle = '#e8ffff';
+        ctx.fillRect(e.x - 2, e.y - 2, 4, 4);
+        ctx.globalAlpha = 1;
+      } else if (e.kind === 'knife') {
+        if (e.t > 8) { fx.splice(i, 1); continue; }
+        ctx.globalAlpha = 1 - e.t / 8;
+        ctx.fillStyle = '#c0c8d0';
+        ctx.fillRect(e.x - 6 + e.t, e.y - 1, 10, 2);
+        ctx.fillStyle = '#ff2a4a';
+        ctx.fillRect(e.x + 4 + e.t, e.y - 2, 3, 4);
         ctx.globalAlpha = 1;
       } else if (e.kind === 'ember') {
         if (e.t > 12) { fx.splice(i, 1); continue; }
@@ -910,7 +1045,7 @@
       }
       ctx.fillStyle = '#e8c090';
       ctx.font = '12px ' + SCHRIFT;
-      ctx.fillText('Rematch tippen', W / 2, H / 2 + 30);
+      ctx.fillText('Rematch → Knopf unten', W / 2, H / 2 + 30);
     }
     if (ich === 0 || ich === 1) {
       ctx.fillStyle = 'rgba(232,192,144,0.85)';
@@ -936,27 +1071,70 @@
     for (i = 0; i < (snap.projektil || []).length; i++) {
       var pr = snap.projektil[i];
       var typ = pr.typ || 'ball';
+      var px = pr.x | 0, py = pr.y | 0;
+      var tck = snap.tick || 0;
       if (typ === 'bodenwelle') {
-        ctx.fillStyle = pr.farbe || '#ff8a4d';
-        ctx.fillRect(pr.x - 8, pr.y - 4, 16, 6);
-        ctx.fillStyle = '#fff8ee';
-        ctx.fillRect(pr.x - 6, pr.y - 2, 4, 2);
-        ctx.fillRect(pr.x + 2, pr.y - 3, 3, 2);
+        // Lava-Erdstoß: gezackte Feuerwelle + Funken
+        var ww = 18 + ((tck + i) % 3);
+        ctx.fillStyle = '#5a0800';
+        ctx.fillRect(px - ww / 2, py - 2, ww, 5);
+        ctx.fillStyle = '#ff3a08';
+        for (var zw = -3; zw <= 3; zw++) {
+          var zh = 3 + ((tck + zw + i) % 4);
+          ctx.fillRect(px + zw * 3, py - zh, 3, zh + 2);
+        }
+        ctx.fillStyle = '#ffb040';
+        ctx.fillRect(px - 4, py - 5, 3, 3);
+        ctx.fillRect(px + 2, py - 7, 2, 4);
+        ctx.fillStyle = '#fff0c0';
+        ctx.fillRect(px - 1, py - 8, 2, 2);
+        ctx.globalAlpha = 0.45;
+        ctx.fillStyle = '#ff4a18';
+        ctx.fillRect(px - ww, py - 1, 6, 2);
+        ctx.globalAlpha = 1;
       } else if (typ === 'fächer' || typ === 'faecher') {
-        ctx.fillStyle = '#d94a6a';
-        ctx.fillRect(pr.x - 3, pr.y - 3, 6, 6);
-        ctx.fillStyle = '#fff0f6';
-        ctx.fillRect(pr.x - 1, pr.y - 1, 2, 2);
-      } else {
-        ctx.fillStyle = pr.farbe || '#ffd36e';
-        ctx.beginPath();
-        ctx.arc(pr.x, pr.y, Math.max(4, (pr.w || 10) / 2), 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#fff8ee';
-        ctx.fillRect(pr.x - 2, pr.y - 2, 4, 4);
+        // Rosenmesser / Eis-Kristall-Fächer
+        var spin = ((tck + i * 7) % 8);
+        ctx.fillStyle = '#8a1030';
+        ctx.fillRect(px - 5, py - 1, 10, 3);
+        ctx.fillStyle = '#ff2a4a';
+        ctx.fillRect(px - 4 + (spin % 3), py - 4, 3, 8);
+        ctx.fillRect(px + 1, py - 5, 3, 9);
+        ctx.fillStyle = '#ffe0ee';
+        ctx.fillRect(px - 1, py - 2, 2, 5);
+        // Eis-/Glanzkante
+        ctx.fillStyle = '#a0e8ff';
+        ctx.globalAlpha = 0.7;
+        ctx.fillRect(px + 3, py - 6, 1, 6);
+        ctx.fillRect(px - 5, py - 3, 1, 4);
+        ctx.globalAlpha = 1;
+        // Trail petals
+        ctx.fillStyle = '#ff6080';
         ctx.globalAlpha = 0.4;
-        ctx.fillStyle = pr.farbe || '#ffd36e';
-        ctx.fillRect(pr.x - 8, pr.y - 1, 6, 2);
+        ctx.fillRect(px - 10, py - 2, 4, 3);
+        ctx.fillRect(px - 14, py, 3, 2);
+        ctx.globalAlpha = 1;
+      } else {
+        // Feuerball / Sonnenball detailliert
+        var rad = Math.max(5, (pr.w || 10) / 2);
+        ctx.fillStyle = '#5a1000';
+        ctx.beginPath(); ctx.arc(px, py, rad + 2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = pr.farbe || '#ff6a20';
+        ctx.beginPath(); ctx.arc(px, py, rad, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#ffb040';
+        ctx.beginPath(); ctx.arc(px - 1, py - 1, Math.max(2, rad - 2), 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#fff8ee';
+        ctx.fillRect(px - 1, py - 2, 3, 3);
+        // Flammenzungen
+        ctx.fillStyle = '#ff3a08';
+        var fj;
+        for (fj = 0; fj < 4; fj++) {
+          var ang = ((tck + fj * 3) % 12) - 6;
+          ctx.fillRect(px - rad - 3 - (fj % 2), py - 2 + ang % 5, 4 + fj, 2);
+        }
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = '#ff8020';
+        ctx.fillRect(px - rad - 10, py - 2, 8, 4);
         ctx.globalAlpha = 1;
       }
     }
@@ -965,6 +1143,7 @@
     var same = snap.p[0] && snap.p[1] && snap.p[0].charId === snap.p[1].charId;
     for (i = 0; i < snap.p.length; i++) {
       snap.p[i]._winPose = (snap.phase === 'ende' && snap.sieger === snap.p[i].id);
+      snap.p[i]._tick = snap.tick || 0;
       fig(ctx, snap.p[i], true, same && i === 1);
     }
     for (i = 0; i < snap.p.length; i++) nametag(ctx, snap.p[i]);

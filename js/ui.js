@@ -1,4 +1,4 @@
-/* Menü, Charakterwahl, Touch-Steuerung. v0.7 */
+/* Menü, Charakterwahl, Touch-Steuerung. v0.8 */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -34,7 +34,16 @@
         screens[i].hidden = screens[i].dataset.screen !== name;
       }
       controls.hidden = name !== 'kampf';
-      overlay.hidden = name === 'kampf';
+      // ende: Overlay mit Rematch-Knopf über dem Canvas
+      overlay.hidden = (name === 'kampf');
+      if (name === 'ende') overlay.classList.add('ende-mode');
+      else overlay.classList.remove('ende-mode');
+    }
+    function setEnde(titel, text) {
+      var tEl = overlay.querySelector('#ende-titel');
+      var pEl = overlay.querySelector('#ende-text');
+      if (tEl) tEl.textContent = titel || 'Ende';
+      if (pEl) pEl.textContent = text || '';
     }
 
     function fillChars(selId) {
@@ -93,6 +102,7 @@
       bind(controls.querySelector('[data-k="l"]'), 'l');
       bind(controls.querySelector('[data-k="r"]'), 'r');
       bind(controls.querySelector('[data-k="u"]'), 'u');
+      bind(controls.querySelector('[data-k="d"]'), 'd');
       bind(controls.querySelector('[data-k="a"]'), 'a');
       bind(controls.querySelector('[data-k="b"]'), 'b');
       bind(controls.querySelector('[data-k="c"]'), 'c');
@@ -168,7 +178,16 @@
           }).catch(function () { setStatus(link); });
         } else setStatus(link);
       });
-      if (rematchBtn) rematchBtn.addEventListener('click', function () { onRematch(); });
+      if (rematchBtn) rematchBtn.addEventListener('click', function () {
+        if (Plaza.Sound) Plaza.Sound.sfx('ui');
+        onRematch();
+      });
+      var iosOk = root.querySelector('[data-act="ios-hint-ok"]');
+      if (iosOk) iosOk.addEventListener('click', function () {
+        var h = root.querySelector('#ios-hint');
+        if (h) h.classList.remove('show');
+        try { localStorage.setItem('plaza.iosHint', '1'); } catch (e0) {}
+      });
       var retryBtn = overlay.querySelector('[data-act="retry"]');
       if (retryBtn) retryBtn.addEventListener('click', function () { onRetry(); });
       var joinNow = overlay.querySelector('[data-act="join-now"]');
@@ -205,6 +224,7 @@
 
     return {
       showScreen: showScreen,
+      setEnde: setEnde,
       fillChars: fillChars,
       setStatus: setStatus,
       showLink: showLink,

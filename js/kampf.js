@@ -433,7 +433,9 @@
           invuln: p.invuln,
           crouch: !!p.crouch, blk: !!p.blocking,
           hitSeq: p.hitSeq | 0, hitKind: p.hitKind || '',
-          combo: p.combo | 0
+          combo: p.combo | 0,
+          vx: Math.round((p.vx || 0) * 10) / 10,
+          af: p.atk ? (p.atkFrame | 0) : 0
         };
       })
     };

@@ -157,26 +157,51 @@
     musicInt = intensity;
     if (musicNodes) { setMusicIntensity(intensity); return; }
     try {
-      var t0 = ctx.currentTime;
-      var g = ctx.createGain(); g.gain.value = 0.045 * intensity;
+      var g = ctx.createGain(); g.gain.value = 0.055 * intensity;
       g.connect(master);
-      var notes = [165, 196, 220, 247, 294, 330]; // düsterer Moll/Phrygisch
-      var oscs = [];
+      // Höllen-Kampf: Bass-Puls + dunkle Lead + Perc
+      var bassPat = [82.4, 82.4, 98, 73.4, 82.4, 82.4, 110, 98];
+      var leadPat = [164.8, 0, 196, 185, 0, 220, 196, 164.8, 0, 247, 220, 0];
       function pulse() {
         if (!musicNodes || mute) return;
-        var n = notes[(musicNodes.step | 0) % notes.length];
-        musicNodes.step++;
-        var o = ctx.createOscillator(), gn = ctx.createGain();
-        o.type = musicNodes.step % 4 === 0 ? 'triangle' : 'square';
-        o.frequency.value = n * (musicInt > 0.7 ? 1.01 : 1);
+        var step = musicNodes.step | 0;
+        musicNodes.step = step + 1;
         var now = ctx.currentTime;
+        var bi = bassPat[step % bassPat.length];
+        // Kick / Bass
+        var o = ctx.createOscillator(), gn = ctx.createGain();
+        o.type = 'triangle';
+        o.frequency.setValueAtTime(bi, now);
+        o.frequency.exponentialRampToValueAtTime(Math.max(40, bi * 0.5), now + 0.12);
         gn.gain.setValueAtTime(0.0001, now);
-        gn.gain.exponentialRampToValueAtTime(0.08 * musicInt, now + 0.02);
-        gn.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+        gn.gain.exponentialRampToValueAtTime(0.11 * musicInt, now + 0.01);
+        gn.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
         o.connect(gn); gn.connect(g);
-        o.start(now); o.stop(now + 0.22);
+        o.start(now); o.stop(now + 0.18);
+        // Hihat crackle every other
+        if (step % 2 === 1 && noiseBuf) {
+          var src = ctx.createBufferSource(); src.buffer = noiseBuf;
+          var bp = ctx.createBiquadFilter(); bp.type = 'highpass'; bp.frequency.value = 6000;
+          var hg = ctx.createGain();
+          hg.gain.setValueAtTime(0.04 * musicInt, now);
+          hg.gain.exponentialRampToValueAtTime(0.0001, now + 0.04);
+          src.connect(bp); bp.connect(hg); hg.connect(g);
+          src.start(now); src.stop(now + 0.05);
+        }
+        // Lead
+        var li = leadPat[step % leadPat.length];
+        if (li > 0) {
+          var o2 = ctx.createOscillator(), g2 = ctx.createGain();
+          o2.type = musicInt > 0.75 ? 'sawtooth' : 'square';
+          o2.frequency.value = li;
+          g2.gain.setValueAtTime(0.0001, now);
+          g2.gain.exponentialRampToValueAtTime(0.045 * musicInt, now + 0.02);
+          g2.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
+          o2.connect(g2); g2.connect(g);
+          o2.start(now); o2.stop(now + 0.22);
+        }
       }
-      musicNodes = { g: g, step: 0, iv: setInterval(pulse, 220) };
+      musicNodes = { g: g, step: 0, iv: setInterval(pulse, 180) };
       pulse();
     } catch (e) {}
   }
@@ -184,7 +209,7 @@
   function setMusicIntensity(v) {
     musicInt = Math.max(0.15, Math.min(1, v));
     if (musicNodes && musicNodes.g) {
-      try { musicNodes.g.gain.value = 0.045 * musicInt; } catch (e) {}
+      try { musicNodes.g.gain.value = 0.055 * musicInt; } catch (e) {}
     }
   }
 
@@ -202,7 +227,7 @@
       g.cancelScheduledValues(now);
       g.setValueAtTime(g.value, now);
       g.linearRampToValueAtTime(0.01, now + 0.03);
-      g.linearRampToValueAtTime(0.045 * musicInt, now + (ms || 180) / 1000);
+      g.linearRampToValueAtTime(0.055 * musicInt, now + (ms || 180) / 1000);
     } catch (e) {}
   }
 

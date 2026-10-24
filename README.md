@@ -1,4 +1,4 @@
-# Plaza-Kampf v0.7
+# Plaza-Kampf v0.8
 
 Dunkles Versus — *la Pelea del Infierno*. Feuer, Vulkane, ernste Street-Fighter-Chars. Statisches HTML/JS auf GitHub Pages.
 
@@ -68,3 +68,11 @@ Live: https://topsentopsen.github.io/plaza-kampf/
 - Gast: Namensfeld auf Warte-Screen vor „Jetzt beitreten“
 - Fix: WASD/JKL stehlen keine Buchstaben mehr aus Namensfeldern (Thompson ✓)
 - Cache: `?v=0.7`
+
+
+## v0.8 „Sprites, Duck, Rematch, Musik, VFX“
+- Touch Duck-Button ▼ · Rematch-Knopf am Ende-Screen
+- iOS: visualViewport, scroll-lock, Safari-Chrome-Tricks, Home-Bildschirm-Hinweis
+- Detailliertere Charakter-Sprites (Idle/Walk/Atk/Hurt)
+- Höllen-Kampf-Musik (WebAudio Loop) · reichere Special-VFX (Feuer/Eis/Messer)
+- Cache: `?v=0.8`

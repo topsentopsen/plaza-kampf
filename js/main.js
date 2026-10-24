@@ -1,8 +1,8 @@
-/* Einstieg, Spielschleife, Host/Client-Logik. v0.7 */
+/* Einstieg, Spielschleife, Host/Client-Logik. v0.8 */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION = 'v0.7';
+  var VERSION = 'v0.8';
   Plaza.VERSION = VERSION;
 
   function params() {
@@ -62,8 +62,38 @@
       // Immer sichtbar; im Landscape/Kampf hervorheben
       b.classList.toggle('hint-pulse', istLandscape() && !istFullscreen());
     }
+    function istIOS() {
+      var ua = navigator.userAgent || '';
+      return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    }
+    function kannFullscreen() {
+      var doc = document.documentElement;
+      return !!(doc.requestFullscreen || doc.webkitRequestFullscreen || doc.webkitRequestFullScreen);
+    }
+    function scrollLock(on) {
+      try {
+        if (on) document.documentElement.classList.add('scroll-lock');
+        else document.documentElement.classList.remove('scroll-lock');
+      } catch (e0) {}
+      try { window.scrollTo(0, 0); } catch (e1) {}
+    }
+    function hideSafariChrome() {
+      // Klassiker + visualViewport: Leiste nach Drehen klein halten soweit möglich
+      try { window.scrollTo(0, 0); } catch (e0) {}
+      try { window.scrollTo(0, 1); } catch (e1) {}
+      setTimeout(function () { try { window.scrollTo(0, 0); } catch (e2) {} }, 50);
+      setTimeout(function () { try { window.scrollTo(0, 0); } catch (e3) {} }, 300);
+    }
+    function showIosHintIfNeeded() {
+      if (!istIOS() || kannFullscreen()) return;
+      try { if (localStorage.getItem('plaza.iosHint') === '1') return; } catch (e0) {}
+      var h = document.getElementById('ios-hint');
+      if (h) h.classList.add('show');
+    }
     function requestFs() {
       var doc = document.documentElement;
+      scrollLock(true);
+      hideSafariChrome();
       if (istFullscreen()) {
         var exit = document.exitFullscreen || document.webkitExitFullscreen;
         if (exit) try { exit.call(document); } catch (e0) {}
@@ -75,13 +105,17 @@
         try {
           var p = req.call(doc);
           if (p && p.catch) p.catch(function () {
-            ui.setStatus('Vollbild: Handy quer drehen, dann ⛶ tippen (iOS: Browserleiste ggf. manuell wegwischen).');
+            ui.setStatus('Vollbild blockiert — quer drehen, dann ⛶ erneut tippen. iPhone: Home-Bildschirm hilft.');
+            showIosHintIfNeeded();
           });
         } catch (e1) {
-          ui.setStatus('Vollbild hier nicht verfügbar — quer drehen nutzt trotzdem mehr Fläche.');
+          ui.setStatus('Vollbild nicht verfügbar — ⛶ nach Drehen tippen / Home-Bildschirm.');
+          showIosHintIfNeeded();
         }
       } else {
-        ui.setStatus('iOS: quer drehen + nach oben wischen (Browserleiste). ⛶-Button trotzdem tippen.');
+        ui.setStatus('iPhone Safari: nach Drehen ⛶ tippen + Adressleiste wegwischen. Oder: Zum Home-Bildschirm.');
+        showIosHintIfNeeded();
+        hideSafariChrome();
       }
       setTimeout(function () { updateFsButton(); _skKey = ''; skalieren(); }, 200);
     }
@@ -89,11 +123,18 @@
       var land = istLandscape();
       document.body.classList.toggle('landscape', land);
       document.body.classList.toggle('landscape-kampf', land && mode === 'kampf');
+      scrollLock(land || mode === 'kampf');
+      if (land) hideSafariChrome();
       updateFsButton();
-      // Auto-FS nur anbieten, nicht erzwingen — Button ist die Geste
+      // Nach Orientierungswechsel FS-Button pulsen; API nur nach Geste
+      if (land && mode === 'kampf' && !istFullscreen()) {
+        updateFsButton(false);
+      }
     }
     function skalieren() {
-      var ww = window.innerWidth, wh = window.innerHeight;
+      var vv = window.visualViewport;
+      var ww = (vv && vv.width) || window.innerWidth;
+      var wh = (vv && vv.height) || window.innerHeight;
       var W = Plaza.Render.W, H = Plaza.Render.H;
       var dpr = Math.min(window.devicePixelRatio || 1, 3);
       var land = istLandscape();
@@ -172,7 +213,7 @@
 
     function setUrl(raum, isHost) {
       try {
-        var q = '?raum=' + encodeURIComponent(raum || '') + '&v=0.7';
+        var q = '?raum=' + encodeURIComponent(raum || '') + '&v=0.8';
         if (isHost) q += '&host=1';
         history.replaceState(null, '', q);
       } catch (e) {}
@@ -237,6 +278,8 @@
           kampf.phase = 'countdown';
           kampf.countdown = 3;
           kampf.tick = 0;
+          mode = 'kampf';
+          ui.showScreen('kampf');
           broadcast();
         } else if (netz) {
           netz.sende({ typ: 'rematch' });
@@ -352,7 +395,7 @@
         }
         if (msg.typ === 'wahl') {
           if (msg.ver && msg.ver !== VERSION) {
-            ui.setStatus('Andere Version (' + msg.ver + ') — bitte beide hart neu laden (?v=0.7)');
+            ui.setStatus('Andere Version (' + msg.ver + ') — bitte beide hart neu laden (?v=0.8)');
           }
           if (msg.name) {
             if (msg.seite === 0) hostName = String(msg.name).slice(0, 14);
@@ -385,6 +428,8 @@
           }
         }
         if (msg.typ === 'rematch' && netz.istHost() && kampf) {
+          mode = 'kampf';
+          ui.showScreen('kampf');
           kampf = Plaza.Kampf.rematch(kampf);
           kampf.phase = 'countdown';
           kampf.countdown = 3;
@@ -422,7 +467,8 @@
     }
 
     document.addEventListener('pointerdown', function () {
-      if (Plaza.Sound) Plaza.Sound.resume();
+      if (Plaza.Sound) { Plaza.Sound.resume(); Plaza.Sound.init(); }
+      hideSafariChrome();
     }, { passive: true });
 
     canvas.addEventListener('pointerdown', function () {
@@ -472,11 +518,33 @@
         }
         letzterSnap = Plaza.Kampf.snapshot(kampf);
         Plaza.Render.zeichne(render, letzterSnap, 0);
-      } else if (mode === 'kampf' && letzterSnap) {
+        if (letzterSnap.phase === 'ende') {
+          if (mode !== 'ende') {
+            mode = 'ende';
+            var wonH = letzterSnap.sieger === 0;
+            if (ui.setEnde) ui.setEnde(wonH ? 'GEWONNEN!' : 'VERLOREN!', letzterSnap.nachricht || '');
+            ui.showScreen('ende');
+          }
+        } else if (mode === 'ende') {
+          mode = 'kampf';
+          ui.showScreen('kampf');
+        }
+      } else if ((mode === 'kampf' || mode === 'ende') && letzterSnap) {
         Plaza.Render.zeichne(render, letzterSnap, seite);
+        if (letzterSnap.phase === 'ende') {
+          if (mode !== 'ende') {
+            mode = 'ende';
+            var wonC = letzterSnap.sieger === seite;
+            if (ui.setEnde) ui.setEnde(wonC ? 'GEWONNEN!' : (letzterSnap.sieger != null ? 'VERLOREN!' : 'Ende'), letzterSnap.nachricht || '');
+            ui.showScreen('ende');
+          }
+        } else if (mode === 'ende' && letzterSnap.phase !== 'ende') {
+          mode = 'kampf';
+          ui.showScreen('kampf');
+        }
         acc = 0;
       } else if (mode === 'menue') {
-        Plaza.Render.menueHint(render, 'Versus · 2 Handys · v0.7');
+        Plaza.Render.menueHint(render, 'Versus · 2 Handys · v0.8');
         acc = 0;
       } else {
         Plaza.Render.menueHint(render, statusElText());
@@ -491,8 +559,22 @@
 
     window.addEventListener('resize', function () { _skKey = ''; tryFullscreen(); skalieren(); });
     window.addEventListener('orientationchange', function () {
-      setTimeout(function () { _skKey = ''; tryFullscreen(); skalieren(); }, 120);
+      hideSafariChrome();
+      setTimeout(function () {
+        _skKey = ''; tryFullscreen(); skalieren(); hideSafariChrome();
+        if (istIOS() && istLandscape()) {
+          ui.setStatus('Nach Drehen: ⛶ tippen (Browserleiste weg).');
+          updateFsButton(false);
+        }
+      }, 120);
+      setTimeout(function () { hideSafariChrome(); _skKey = ''; skalieren(); }, 450);
     });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', function () {
+        _skKey = ''; skalieren();
+        if (istLandscape()) hideSafariChrome();
+      });
+    }
     // Fullscreen oft nur nach Geste — bei erstem Tap im Kampf nachholen
     document.addEventListener('pointerdown', function () {
       if (mode === 'kampf' && istLandscape()) tryFullscreen();
