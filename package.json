@@ -1,9 +1,9 @@
 {
   "name": "plaza-kampf",
-  "version": "2.7.0",
+  "version": "2.8.0",
   "private": true,
   "description": "Plaza-Kampf \u2014 Street-Fighter-Style 2P f\u00fcr GitHub Pages",
   "scripts": {
-    "test": "node tests/kampf.test.js && node tests/ki.test.js && node tests/netz.test.js && node tests/netz-regression.test.js && node tests/ui-keys.test.js && node tests/smoke-kampf.test.js && node tests/input-regression.test.js && node tests/solo-puppeteer.test.js && node tests/mobile-touch.test.js && node tests/audio-smoke.test.js && node tests/perf-budget.test.js && node tests/ux-smoke.test.js"
+    "test": "node tests/kampf.test.js && node tests/ki.test.js && node tests/netz.test.js && node tests/netz-regression.test.js && node tests/ui-keys.test.js && node tests/smoke-kampf.test.js && node tests/input-regression.test.js && node tests/solo-puppeteer.test.js && node tests/mobile-touch.test.js && node tests/audio-smoke.test.js && node tests/perf-budget.test.js && node tests/ux-smoke.test.js && node tests/rc-smoke.test.js"
   }
 }

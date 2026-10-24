@@ -36,7 +36,7 @@ if (process.env.PLAZA_SKIP_BROWSER === '1' || !haveChrome()) {
   });
   var page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 900 });
-  await page.goto('http://127.0.0.1:' + PORT + '/?v=2.7', { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await page.goto('http://127.0.0.1:' + PORT + '/?v=2.8', { waitUntil: 'domcontentloaded', timeout: 15000 });
   await page.waitForSelector('#name-input', { timeout: 8000 });
   var ver = await page.$eval('#version', function (el) { return el.textContent; });
   assert.ok(/Plaza-Kampf/.test(ver), 'version label');

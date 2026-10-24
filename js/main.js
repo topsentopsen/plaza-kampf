@@ -1,8 +1,8 @@
-/* Einstieg, Spielschleife, Host/Client-Logik. v2.7 — Solo/Testmodus. */
+/* Einstieg, Spielschleife, Host/Client-Logik. v2.8 — Solo/Testmodus. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION = 'v2.7';
+  var VERSION = 'v2.8';
   Plaza.VERSION = VERSION;
   function sanitizeName(n) {
     n = String(n == null ? '' : n).replace(/[\u0000-\u001f<>]/g, '').trim();
@@ -258,7 +258,7 @@
         mode = 'menue';
         ui.showScreen('menue');
         ui.setStatus('');
-        Plaza.Render.menueHint(render, 'Versus · Solo · v2.7');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v2.8');
       },
       onHost: function () {
         soloMode = false;
@@ -498,7 +498,7 @@
         }
         if (msg.typ === 'wahl') {
           if (msg.ver && msg.ver !== VERSION) {
-            ui.setStatus('Andere Version (' + msg.ver + ') — bitte beide hart neu laden (?v=' + (Plaza.Netz && Plaza.Netz.VERSION_Q ? Plaza.Netz.VERSION_Q : '2.0') + ')');
+            ui.setStatus('Andere Version (' + msg.ver + ') — bitte beide hart neu laden (?v=' + (Plaza.Netz && Plaza.Netz.VERSION_Q ? Plaza.Netz.VERSION_Q : '2.8') + ')');
           }
           if (msg.name) {
             if (msg.seite === 0) hostName = String(msg.name).slice(0, 14);
@@ -542,7 +542,7 @@
           }
         }
         if (msg.typ === 'rematch' && netz.istHost() && kampf) {
-          // v2.7: nur aus Endphase, Version prüfen, Doppel-Rematch ignorieren
+          // v2.8: nur aus Endphase, Version prüfen, Doppel-Rematch ignorieren
           if (kampf.phase !== 'ende' && mode !== 'ende') {
             /* ignore mid-fight rematch spam */
           } else if (msg.ver && msg.ver !== VERSION) {
@@ -711,7 +711,7 @@
         }
         acc = 0;
       } else if (mode === 'menue') {
-        Plaza.Render.menueHint(render, 'Versus · Solo · v2.7');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v2.8');
         acc = 0;
       } else {
         Plaza.Render.menueHint(render, statusElText());
@@ -752,7 +752,7 @@
     document.addEventListener('webkitfullscreenchange', function () { updateFsButton(); _skKey = ''; skalieren(); });
     skalieren();
     if ('serviceWorker' in navigator) {
-      try { navigator.serviceWorker.register('sw.js?v=2.7'); } catch (eSw) {}
+      try { navigator.serviceWorker.register('sw.js?v=2.8'); } catch (eSw) {}
     }
     requestAnimationFrame(loop);
   }
