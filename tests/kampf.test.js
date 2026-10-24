@@ -57,4 +57,15 @@ st.phase = 'kampf'; st.zeit = 0;
 Plaza.Kampf.tick(st);
 assert.equal(st.phase, 'ende');
 
+// Spielernamen
+st = Plaza.Kampf.neu('biel', 'lola', 'Tobi', 'Alex');
+assert.equal(st.p[0].name, 'Tobi');
+assert.equal(st.p[1].name, 'Alex');
+st.phase = 'kampf'; st.zeit = 0;
+Plaza.Kampf.tick(st);
+assert.equal(st.phase, 'ende');
+assert.ok(st.nachricht.indexOf('gewinnt') !== -1);
+var st2 = Plaza.Kampf.rematch(st);
+assert.equal(st2.p[0].name, 'Tobi');
+
 console.log('ok — kampf.test.js (snap=' + snapLen + 'B)');

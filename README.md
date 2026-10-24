@@ -1,4 +1,4 @@
-# Plaza-Kampf v0.5
+# Plaza-Kampf v0.6
 
 Dunkles Versus — *la Pelea del Infierno*. Feuer, Vulkane, ernste Street-Fighter-Chars. Statisches HTML/JS auf GitHub Pages.
 
@@ -54,3 +54,10 @@ Live: https://topsentopsen.github.io/plaza-kampf/
 - Arena: Asche-Partikel + Lava-Glow; Lobby-Schritte klarer
 - Feel: Block/Hitstun/Dash-Tuning
 - Cache: hart neu laden mit `?v=0.5`
+
+
+## v0.6 „Namen & Ende“
+- Spielernamen eingeben (Lobby/Wahl), schweben über dem Kopf, Netz-Sync
+- Endscreen für **beide**: GEWONNEN / VERLOREN + Siegerzeile (Ende-Broadcast-Fix)
+- Querformat: Fullscreen wo möglich, Canvas nutzt fast die ganze Fläche
+- Cache: hart neu laden mit `?v=0.6`

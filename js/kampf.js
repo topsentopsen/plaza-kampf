@@ -1,4 +1,4 @@
-/* Autoritative Kampfsimulation (läuft auf dem Host). v0.5: Feel/Balance, Combo-Reset. */
+/* Autoritative Kampfsimulation (läuft auf dem Host). v0.6: Spielernamen. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -22,11 +22,21 @@
     };
   }
 
-  function neu(charA, charB) {
+  function sanitizeName(n, fallback) {
+    n = (n == null ? '' : String(n)).replace(/[\u0000-\u001f<>]/g, '').trim();
+    if (n.length > 12) n = n.slice(0, 12);
+    return n || fallback || 'Spieler';
+  }
+
+  function neu(charA, charB, nameA, nameB) {
+    var a = spielerNeu(0, charA || 'biel');
+    var b = spielerNeu(1, charB || 'toni');
+    a.name = sanitizeName(nameA, a.name);
+    b.name = sanitizeName(nameB, b.name);
     return {
       tick: 0, phase: 'kampf',
       countdown: 3, zeit: ROUND_ZEIT,
-      p: [spielerNeu(0, charA || 'biel'), spielerNeu(1, charB || 'toni')],
+      p: [a, b],
       projektil: [],
       sieger: null, endeTimer: 0,
       nachricht: 'Kampf!'
@@ -430,7 +440,7 @@
   }
 
   function rematch(st) {
-    return neu(st.p[0].charId, st.p[1].charId);
+    return neu(st.p[0].charId, st.p[1].charId, st.p[0].name, st.p[1].name);
   }
 
   Plaza.Kampf = {

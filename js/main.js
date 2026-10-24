@@ -1,8 +1,8 @@
-/* Einstieg, Spielschleife, Host/Client-Logik. v0.5 */
+/* Einstieg, Spielschleife, Host/Client-Logik. v0.6 */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION = 'v0.5';
+  var VERSION = 'v0.6';
   Plaza.VERSION = VERSION;
 
   function params() {
@@ -32,25 +32,62 @@
     var mode = 'menue';
     var hostWahl = null, gastWahl = null;
     var pendingRaum = null;
+    var meinName = '';
+    var hostName = '';
+    var gastName = '';
+    try {
+      meinName = (localStorage.getItem('plazaName') || '').trim().slice(0, 12);
+    } catch (e0) {}
+
 
     var _skKey = '';
+    function istLandscape() {
+      return window.innerWidth > window.innerHeight;
+    }
+    function tryFullscreen() {
+      var land = istLandscape();
+      document.body.classList.toggle('landscape', land);
+      document.body.classList.toggle('landscape-kampf', land && mode === 'kampf');
+      if (!(land && mode === 'kampf')) return;
+      var doc = document.documentElement;
+      var fs = document.fullscreenElement || document.webkitFullscreenElement;
+      if (fs) return;
+      var req = doc.requestFullscreen || doc.webkitRequestFullscreen || doc.webkitRequestFullScreen;
+      if (!req) return;
+      try { var p = req.call(doc); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+    }
     function skalieren() {
-      var ww = window.innerWidth - 12, wh = window.innerHeight;
+      var ww = window.innerWidth, wh = window.innerHeight;
       var W = Plaza.Render.W, H = Plaza.Render.H;
       var dpr = Math.min(window.devicePixelRatio || 1, 3);
-      var maxH = wh * 0.58;
-      var sfInt = Math.max(1, Math.floor(Math.min(ww / W, maxH / H)));
+      var land = istLandscape();
+      var safeB = 0;
+      try {
+        var cs = getComputedStyle(document.documentElement);
+        // approx controls height in landscape vs portrait
+      } catch (e1) {}
+      var ctrlH = land ? Math.max(64, Math.min(90, wh * 0.18)) : Math.max(70, Math.min(110, wh * 0.22));
+      var statusH = (mode === 'kampf' && land) ? 0 : 28;
+      var maxW = ww - (land ? 4 : 12);
+      var maxH = wh - ctrlH - statusH - (land ? 4 : 16);
+      if (maxH < 80) maxH = wh * 0.55;
+      var sfInt = Math.max(1, Math.floor(Math.min(maxW / W, maxH / H)));
       var cssW = W * sfInt, cssH = H * sfInt;
-      if (sfInt <= 1) {
-        var soft = Math.min(ww / W, maxH / H, 2.5);
+      var soft = Math.min(maxW / W, maxH / H);
+      if (land || soft > sfInt) {
+        // Landscape: fill as much as possible (soft scale OK; buffer stays crisp)
         cssW = Math.floor(W * soft);
         cssH = Math.floor(H * soft);
-      } else if (ww > cssW + W * 0.45 && sfInt < 3) {
+      } else if (sfInt <= 1) {
+        soft = Math.min(maxW / W, maxH / H, 2.5);
+        cssW = Math.floor(W * soft);
+        cssH = Math.floor(H * soft);
+      } else if (maxW > cssW + W * 0.45 && sfInt < 3) {
         cssW = Math.floor(W * (sfInt + 0.5));
         cssH = Math.floor(H * (sfInt + 0.5));
       }
       var buf = dpr >= 2.5 ? 3 : 2;
-      var key = cssW + 'x' + cssH + '@' + buf;
+      var key = cssW + 'x' + cssH + '@' + buf + (land ? 'L' : 'P') + mode;
       if (key === _skKey) return;
       _skKey = key;
       rahmen.style.width = cssW + 'px';
@@ -59,15 +96,34 @@
       canvas.style.height = '100%';
       if (Plaza.Render.setzePuffer) Plaza.Render.setzePuffer(render, buf);
       document.documentElement.style.setProperty('--s', String(cssW / W));
-      var pad = Math.max(56, Math.min(76, Math.round(48 + (cssW / W) * 10)));
+      var pad = Math.max(land ? 48 : 56, Math.min(land ? 68 : 76, Math.round(44 + (cssW / W) * 9)));
       document.documentElement.style.setProperty('--pad', pad + 'px');
-      var hudFs = Math.max(13, Math.min(16, Math.round(12 + (cssW / W) * 1.5)));
+      var hudFs = Math.max(12, Math.min(16, Math.round(11 + (cssW / W) * 1.4)));
       document.documentElement.style.setProperty('--ui', hudFs + 'px');
+      document.documentElement.style.setProperty('--ctrl-h', ctrlH + 'px');
+    }
+
+
+    function liesName() {
+      var el = document.getElementById('name-input-wahl') || document.getElementById('name-input');
+      var elMenue = document.getElementById('name-input');
+      var n = '';
+      if (el && (el.value || '').trim()) n = (el.value || '').trim();
+      else if (elMenue && (elMenue.value || '').trim()) n = (elMenue.value || '').trim();
+      else n = meinName;
+      n = n.replace(/[<>]/g, '').slice(0, 12);
+      meinName = n;
+      try { if (n) localStorage.setItem('plazaName', n); } catch (e2) {}
+      // sync both fields
+      if (elMenue && n && !elMenue.value) elMenue.value = n;
+      var elW = document.getElementById('name-input-wahl');
+      if (elW && n && !elW.value) elW.value = n;
+      return n;
     }
 
     function setUrl(raum, isHost) {
       try {
-        var q = '?raum=' + encodeURIComponent(raum || '') + '&v=0.5';
+        var q = '?raum=' + encodeURIComponent(raum || '') + '&v=0.6';
         if (isHost) q += '&host=1';
         history.replaceState(null, '', q);
       } catch (e) {}
@@ -78,6 +134,8 @@
       getLink: function () { return netz ? netz.linkFuer(null, false) : ''; },
       onHost: function () {
         seite = 0;
+        hostName = liesName();
+        meinName = hostName;
         netz.hostStarten();
         ui.showScreen('warte');
         ui.setStatus('Broker wird verbunden…');
@@ -90,6 +148,8 @@
           return;
         }
         seite = 1;
+        gastName = liesName();
+        meinName = gastName;
         pendingRaum = code;
         netz.beitreten(code);
         ui.showScreen('warte');
@@ -110,10 +170,11 @@
       },
       onWahl: function (id) {
         meinChar = id;
-        if (netz && netz.istHost()) hostWahl = id;
-        else gastWahl = id;
+        var nm = liesName();
+        if (netz && netz.istHost()) { hostWahl = id; hostName = nm || hostName; }
+        else { gastWahl = id; gastName = nm || gastName; }
         if (netz && netz.istBereit()) {
-          netz.sende({ typ: 'wahl', charId: id, seite: seite, ver: VERSION });
+          netz.sende({ typ: 'wahl', charId: id, seite: seite, ver: VERSION, name: nm });
         }
         ui.setStatus('Gewählt: ' + Plaza.Chars.finde(id).name + ' — warte auf den anderen…');
         if (netz && netz.istHost()) versucheStart();
@@ -143,11 +204,16 @@
     function versucheStart() {
       if (!(netz && netz.istHost())) return;
       if (!hostWahl || !gastWahl) return;
-      kampf = Plaza.Kampf.neu(hostWahl, gastWahl);
+      var n0 = hostName || Plaza.Chars.finde(hostWahl).name;
+      var n1 = gastName || Plaza.Chars.finde(gastWahl).name;
+      kampf = Plaza.Kampf.neu(hostWahl, gastWahl, n0, n1);
       kampf.phase = 'countdown';
       kampf.countdown = 3;
       mode = 'kampf';
       ui.showScreen('kampf');
+      _skKey = '';
+      tryFullscreen();
+      skalieren();
       if (Plaza.Sound) Plaza.Sound.resetDiff();
       if (Plaza.Render.resetFx) Plaza.Render.resetFx();
       broadcast();
@@ -171,14 +237,18 @@
           ui.setStatus('Raum ' + netz.getRaum() + ' offen' + (via ? ' (' + via + ')' : '') + ' — Link teilen. Handy nicht sperren!');
           ui.showRetry(false);
         } else if (t === 'verbunden') {
-          ui.setStatus('Verbunden' + (via || netz.getTransport() ? ' über ' + (via || netz.getTransport()) : '') + '! Tippe deinen Charakter');
+          ui.setStatus('Verbunden' + (via || netz.getTransport() ? ' über ' + (via || netz.getTransport()) : '') + '! Name prüfen, dann Charakter tippen');
           hostWahl = null;
           gastWahl = null;
+          var nm = liesName();
+          if (netz.istHost()) hostName = nm || hostName;
+          else gastName = nm || gastName;
           ui.fillChars(null);
           ui.showScreen('wahl');
           mode = 'wahl';
           ui.showRetry(false);
-          netz.sende({ typ: 'join', seite: seite });
+          netz.sende({ typ: 'join', seite: seite, name: nm });
+          netz.sende({ typ: 'name', seite: seite, name: nm });
         } else if (t === 'fehler') {
           var err = extra.err || '';
           var hinweis = extra.hinweis || '';
@@ -211,12 +281,24 @@
       },
       onMsg: function (msg) {
         if (!msg || !msg.typ) return;
-        if (msg.typ === 'hello' || msg.typ === 'join') {
-          if (netz.istHost()) ui.setStatus('Mitspieler da — Charakter wählen');
+        if (msg.typ === 'hello' || msg.typ === 'join' || msg.typ === 'name') {
+          if (msg.name) {
+            if (msg.seite === 0) hostName = String(msg.name).slice(0, 12);
+            if (msg.seite === 1) gastName = String(msg.name).slice(0, 12);
+          }
+          if (netz.istHost() && (msg.typ === 'hello' || msg.typ === 'join')) {
+            ui.setStatus('Mitspieler da — Charakter wählen');
+            // eigenen Namen nochmal schicken
+            netz.sende({ typ: 'name', seite: 0, name: hostName || liesName() });
+          }
         }
         if (msg.typ === 'wahl') {
           if (msg.ver && msg.ver !== VERSION) {
-            ui.setStatus('Andere Version (' + msg.ver + ') — bitte beide hart neu laden (?v=0.5)');
+            ui.setStatus('Andere Version (' + msg.ver + ') — bitte beide hart neu laden (?v=0.6)');
+          }
+          if (msg.name) {
+            if (msg.seite === 0) hostName = String(msg.name).slice(0, 12);
+            if (msg.seite === 1) gastName = String(msg.name).slice(0, 12);
           }
           if (netz.istHost()) {
             if (msg.seite === 1) gastWahl = msg.charId;
@@ -232,6 +314,14 @@
         if (msg.typ === 'state' && !netz.istHost()) {
           letzterSnap = msg.state;
           if (mode !== 'kampf') {
+            mode = 'kampf';
+            ui.showScreen('kampf');
+            _skKey = '';
+            tryFullscreen();
+            skalieren();
+          }
+          // Ende immer zeichnen (auch wenn vorher kein Frame kam)
+          if (letzterSnap && letzterSnap.phase === 'ende') {
             mode = 'kampf';
             ui.showScreen('kampf');
           }
@@ -303,12 +393,19 @@
       skalieren();
 
       if (mode === 'kampf' && netz && netz.istHost() && kampf) {
+        var phaseVorher = kampf.phase;
         while (acc >= STEP) {
           acc -= STEP;
           Plaza.Kampf.setInput(kampf, 0, lokalInput);
           Plaza.Kampf.setInput(kampf, 1, peerInput);
           Plaza.Kampf.tick(kampf);
-          if (kampf.tick % 2 === 0) broadcast();
+          // Ende: tick friert ein → sofort + regelmäßig broadcasten (Bugfix: Client sah kein Ende)
+          if (kampf.phase === 'ende') {
+            if (phaseVorher !== 'ende' || (kampf.endeTimer % 12) === 0) broadcast();
+            phaseVorher = 'ende';
+          } else if (kampf.tick % 2 === 0) {
+            broadcast();
+          }
         }
         letzterSnap = Plaza.Kampf.snapshot(kampf);
         Plaza.Render.zeichne(render, letzterSnap, 0);
@@ -316,7 +413,7 @@
         Plaza.Render.zeichne(render, letzterSnap, seite);
         acc = 0;
       } else if (mode === 'menue') {
-        Plaza.Render.menueHint(render, 'Versus · 2 Handys · v0.5');
+        Plaza.Render.menueHint(render, 'Versus · 2 Handys · v0.6');
         acc = 0;
       } else {
         Plaza.Render.menueHint(render, statusElText());
@@ -329,7 +426,19 @@
       return el ? el.textContent : '';
     }
 
-    window.addEventListener('resize', skalieren);
+    window.addEventListener('resize', function () { _skKey = ''; tryFullscreen(); skalieren(); });
+    window.addEventListener('orientationchange', function () {
+      setTimeout(function () { _skKey = ''; tryFullscreen(); skalieren(); }, 120);
+    });
+    // Fullscreen oft nur nach Geste — bei erstem Tap im Kampf nachholen
+    document.addEventListener('pointerdown', function () {
+      if (mode === 'kampf' && istLandscape()) tryFullscreen();
+    }, { passive: true });
+    // Prefill name input
+    ['name-input', 'name-input-wahl'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el && meinName) el.value = meinName;
+    });
     skalieren();
     requestAnimationFrame(loop);
   }

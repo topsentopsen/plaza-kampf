@@ -1,4 +1,4 @@
-/* Pixel-Canvas v0.5: Idle-Anims, Hit-FX, Asche, Combo, Win-Pose. */
+/* Pixel-Canvas v0.6: Namenschilder, klarer Endscreen Sieg/Niederlage. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -714,6 +714,23 @@
     };
   }
 
+  function nametag(ctx, p) {
+    if (!p || !p.name) return;
+    var label = String(p.name);
+    if (label.length > 12) label = label.slice(0, 12);
+    var top = (p.y | 0) - (p.crouch ? 36 : 50);
+    ctx.font = 'bold 8px ' + SCHRIFT;
+    ctx.textAlign = 'center';
+    var tw = 0;
+    try { tw = ctx.measureText(label).width; } catch (e) { tw = label.length * 5; }
+    ctx.fillStyle = 'rgba(0,0,0,0.72)';
+    ctx.fillRect(p.x - tw / 2 - 3, top - 9, tw + 6, 12);
+    ctx.fillStyle = '#1a0808';
+    ctx.fillRect(p.x - tw / 2 - 3, top + 2, tw + 6, 1);
+    ctx.fillStyle = '#ffe080';
+    ctx.fillText(label, p.x, top);
+  }
+
   function drawFx(ctx) {
     for (var i = fx.length - 1; i >= 0; i--) {
       var e = fx[i];
@@ -866,23 +883,34 @@
     }
 
     if (snap.phase === 'ende') {
-      ctx.fillStyle = 'rgba(0,0,0,0.72)';
+      ctx.fillStyle = 'rgba(0,0,0,0.78)';
       ctx.fillRect(0, 0, W, H);
-      ctx.fillStyle = '#ff6020';
-      ctx.font = 'bold 20px ' + SCHRIFT;
       ctx.textAlign = 'center';
-      ctx.fillText(snap.nachricht || 'Ende', W / 2, H / 2 - 14);
+      var won = (ich === 0 || ich === 1) && snap.sieger === ich;
+      var lost = (ich === 0 || ich === 1) && snap.sieger != null && snap.sieger !== ich;
+      if (won) {
+        ctx.fillStyle = '#40ff80';
+        ctx.font = 'bold 22px ' + SCHRIFT;
+        ctx.fillText('GEWONNEN!', W / 2, H / 2 - 28);
+      } else if (lost) {
+        ctx.fillStyle = '#ff4040';
+        ctx.font = 'bold 22px ' + SCHRIFT;
+        ctx.fillText('VERLOREN!', W / 2, H / 2 - 28);
+      }
+      ctx.fillStyle = '#ff6020';
+      ctx.font = 'bold 16px ' + SCHRIFT;
+      ctx.fillText(snap.nachricht || 'Ende', W / 2, H / 2 - 6);
       if (snap.sieger != null && snap.p[snap.sieger]) {
         var wc = Plaza.Chars.finde(snap.p[snap.sieger].charId);
         if (wc && wc.winLine) {
           ctx.fillStyle = '#ffb040';
           ctx.font = '10px ' + SCHRIFT;
-          ctx.fillText('„' + wc.winLine + '“', W / 2, H / 2 + 4);
+          ctx.fillText('„' + wc.winLine + '“', W / 2, H / 2 + 12);
         }
       }
       ctx.fillStyle = '#e8c090';
       ctx.font = '12px ' + SCHRIFT;
-      ctx.fillText('Rematch tippen', W / 2, H / 2 + 22);
+      ctx.fillText('Rematch tippen', W / 2, H / 2 + 30);
     }
     if (ich === 0 || ich === 1) {
       ctx.fillStyle = 'rgba(232,192,144,0.85)';
@@ -939,6 +967,7 @@
       snap.p[i]._winPose = (snap.phase === 'ende' && snap.sieger === snap.p[i].id);
       fig(ctx, snap.p[i], true, same && i === 1);
     }
+    for (i = 0; i < snap.p.length; i++) nametag(ctx, snap.p[i]);
     drawFx(ctx);
     fg(ctx, snap.tick || 0);
     hud(ctx, snap, ich);

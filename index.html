@@ -3,10 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>Plaza-Kampf v0.5</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Plaza-Kampf v0.6</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230a0608'/%3E%3Ccircle cx='4' cy='11' r='3' fill='%238a1008'/%3E%3Ccircle cx='12' cy='11' r='3' fill='%23ff3a08'/%3E%3Cpath d='M6 4h4v3H6z' fill='%23ff6020'/%3E%3C/svg%3E">
 <style>
-  html, body { margin: 0; height: 100%; background: #050208; overflow: hidden; touch-action: manipulation;
+  html, body { margin: 0; width: 100%; height: 100%; height: 100dvh; width: 100dvw;
+    background: #050208; overflow: hidden; touch-action: manipulation;
     -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
     font-family: ui-rounded, "SF Pro Rounded", "Arial Rounded MT Bold", "Trebuchet MS", system-ui, sans-serif;
     color: #e8c090; }
@@ -15,6 +19,20 @@
     padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
   #rahmen { position: relative; line-height: 0; margin-top: 8px;
     box-shadow: 0 0 0 4px #5a1810, 0 8px 40px rgba(0,0,0,.85); border-radius: 6px; background: #050208; }
+  /* Landscape / Fullscreen: maximale Fläche für den Kampf */
+  body.landscape-kampf { justify-content: center; padding: 0; }
+  body.landscape-kampf #status { display: none; }
+  body.landscape-kampf #version { opacity: .55; font-size: 10px; }
+  body.landscape-kampf #rahmen { margin: 0; border-radius: 0;
+    box-shadow: none; max-width: 100dvw; max-height: calc(100dvh - var(--ctrl-h, 72px)); }
+  body.landscape-kampf #controls {
+    padding: 4px 10px calc(6px + env(safe-area-inset-bottom, 0px)); }
+  body.landscape #overlay .screen { max-height: 88dvh; width: min(520px, 92vw); }
+  @media (orientation: landscape) {
+    body:not(.landscape-kampf) #rahmen { margin-top: 4px; }
+  }
+  :fullscreen, :-webkit-full-screen { background: #050208; }
+  :fullscreen body, :-webkit-full-screen body { width: 100%; height: 100%; }
   canvas { display: block; image-rendering: pixelated; image-rendering: -moz-crisp-edges;
     image-rendering: crisp-edges; -ms-interpolation-mode: nearest-neighbor;
     touch-action: none; -webkit-tap-highlight-color: transparent; width: 100%; height: 100%; }
@@ -73,7 +91,7 @@
 </head>
 <body>
 <button type="button" id="mute" data-act="mute" aria-label="Ton aus">🔊</button>
-<div id="version">Plaza-Kampf v0.5</div>
+<div id="version">Plaza-Kampf v0.6</div>
 <div id="rahmen"><canvas id="spiel" width="320" height="180"></canvas></div>
 <div id="status"></div>
 
@@ -81,9 +99,13 @@
   <div class="screen" data-screen="menue">
     <h1>Plaza-Kampf</h1>
     <p>la Pelea del Infierno — dunkles Versus für zwei Handys.</p>
-    <p class="hint steps"><strong>1.</strong> Host: Raum erstellen → Link teilen<br>
+    <p class="hint steps"><strong>1.</strong> Namen tippen · Host: Raum erstellen → Link teilen<br>
     <strong>2.</strong> Gast: Link öffnen → <em>Jetzt beitreten</em><br>
-    <strong>3.</strong> Beide Charakter wählen — Kampf startet.</p>
+    <strong>3.</strong> Beide Charakter wählen — Kampf startet.<br>
+    <strong>Tipp:</strong> Handy quer drehen → Vollbild / mehr Arena.</p>
+    <div class="row">
+      <input id="name-input" type="text" placeholder="Dein Name" maxlength="12" autocomplete="nickname" autocapitalize="words" spellcheck="false">
+    </div>
     <div class="row">
       <button type="button" data-act="host">Raum erstellen</button>
       <button type="button" class="secondary" data-act="join">Beitreten</button>
@@ -91,7 +113,7 @@
     <div class="row">
       <input id="raum-input" type="text" placeholder="Raum-Code" autocomplete="off" autocapitalize="off" spellcheck="false">
     </div>
-    <p class="hint">v0.5: Schärfere Auflösung (Retina), Idle/Hit-FX, Sound-Punch, Combo. Block=weg vom Gegner · Duck=▼. Hart neu laden (?v=0.5). Ton: Klingelschalter?</p>
+    <p class="hint">v0.6: Spielernamen, Endscreen für beide (Sieg/Niederlage), Querformat-Fullscreen. Hart neu laden (?v=0.6).</p>
   </div>
 
   <div class="screen" data-screen="warte" hidden>
@@ -105,11 +127,14 @@
     </div>
     <p class="hint"><strong>Host:</strong> Code/Link teilen (ohne &amp;host=1).<br>
     <strong>Gast:</strong> Link öffnen → unten <em>Jetzt beitreten</em> tippen.<br>
-    Beide Handys brauchen dieselbe Version (?v=0.5).</p>
+    Beide Handys brauchen dieselbe Version (?v=0.6). Namen stehen über den Köpfen.</p>
   </div>
 
   <div class="screen" data-screen="wahl" hidden>
     <h1>Charakter wählen</h1>
+    <div class="row">
+      <input id="name-input-wahl" type="text" placeholder="Dein Name (überm Kopf)" maxlength="12" autocomplete="nickname" autocapitalize="words" spellcheck="false">
+    </div>
     <p>Tippe eine Karte. Start, sobald beide gewählt haben. A=leicht · B=schwer · S=spezial · ▼=duck · weg=block.</p>
     <div class="chars"></div>
   </div>
@@ -130,13 +155,13 @@
 
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="js/palette.js?v=0.5"></script>
-<script src="js/chars.js?v=0.5"></script>
-<script src="js/kampf.js?v=0.5"></script>
-<script src="js/netz.js?v=0.5"></script>
-<script src="js/sound.js?v=0.5"></script>
-<script src="js/render.js?v=0.5"></script>
-<script src="js/ui.js?v=0.5"></script>
-<script src="js/main.js?v=0.5"></script>
+<script src="js/palette.js?v=0.6"></script>
+<script src="js/chars.js?v=0.6"></script>
+<script src="js/kampf.js?v=0.6"></script>
+<script src="js/netz.js?v=0.6"></script>
+<script src="js/sound.js?v=0.6"></script>
+<script src="js/render.js?v=0.6"></script>
+<script src="js/ui.js?v=0.6"></script>
+<script src="js/main.js?v=0.6"></script>
 </body>
 </html>
