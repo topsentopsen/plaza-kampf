@@ -130,7 +130,9 @@
       return false;
     }
     if (istBlock(ang, opf, m)) {
-      var chip = Math.max(1, Math.ceil(m.dmg * 0.12));
+      // Specials chippen stärker — Block allein reicht nicht
+      var chipMul = (ang.atk && ang.atk.art === 'special') ? 0.22 : 0.12;
+      var chip = Math.max(1, Math.ceil(m.dmg * chipMul));
       opf.hp = Math.max(0, opf.hp - chip);
       opf.stun = 4; // kürzer — Block fühlt sich reaktiv an
       opf.vx = ang.facing * m.knock * 0.55;
@@ -151,7 +153,7 @@
     opf.crouch = false;
     opf.invuln = m.dmg >= 14 ? 10 : 6;
     opf.hitSeq++;
-    opf.hitKind = m.throw ? 'throw' : (m.dmg >= 14 ? 'heavy' : 'light');
+    opf.hitKind = m.throw ? 'throw' : ((ang.atk && ang.atk.art === 'special') ? 'special' : (m.dmg >= 14 ? 'heavy' : 'light'));
     opf.combo = 0; // Getroffen → eigene Combo weg
     ang.combo = (ang.combo || 0) + 1;
     if (m.throw) {

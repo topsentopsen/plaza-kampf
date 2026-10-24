@@ -1,8 +1,8 @@
-/* Einstieg, Spielschleife, Host/Client-Logik. v0.8 */
+/* Einstieg, Spielschleife, Host/Client-Logik. v0.9 */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION = 'v0.8';
+  var VERSION = 'v0.9';
   Plaza.VERSION = VERSION;
 
   function params() {
@@ -35,6 +35,7 @@
     var meinName = '';
     var hostName = '';
     var gastName = '';
+    var netDown = false;
     try {
       meinName = (localStorage.getItem('plazaName') || '').trim().slice(0, 14);
     } catch (e0) {}
@@ -213,7 +214,7 @@
 
     function setUrl(raum, isHost) {
       try {
-        var q = '?raum=' + encodeURIComponent(raum || '') + '&v=0.8';
+        var q = '?raum=' + encodeURIComponent(raum || '') + '&v=0.9';
         if (isHost) q += '&host=1';
         history.replaceState(null, '', q);
       } catch (e) {}
@@ -261,6 +262,19 @@
       onFullscreen: function () {
         requestFs();
       },
+      onSwap: function () {
+        // Nur vor Kampf: eigene Seite umkehren (Host bleibt sim-autoritativ auf Index 0/1 via seite)
+        if (mode === 'kampf' || mode === 'ende') {
+          ui.setStatus('Seiten nur vor dem Kampf tauschen.');
+          return;
+        }
+        seite = seite === 0 ? 1 : 0;
+        if (ui.setSeiteHint) ui.setSeiteHint(seite);
+        ui.setStatus(seite === 0 ? 'Du startest links (P1).' : 'Du startest rechts (P2).');
+        if (netz && netz.istBereit()) {
+          netz.sende({ typ: 'swap', seite: seite, ver: VERSION });
+        }
+      },
       onWahl: function (id) {
         meinChar = id;
         var nm = liesName();
@@ -301,7 +315,12 @@
       if (!hostWahl || !gastWahl) return;
       var n0 = hostName || Plaza.Chars.finde(hostWahl).name;
       var n1 = gastName || Plaza.Chars.finde(gastWahl).name;
-      kampf = Plaza.Kampf.neu(hostWahl, gastWahl, n0, n1);
+      var c0 = hostWahl, c1 = gastWahl, nm0 = n0, nm1 = n1;
+      // Host seite===1 → Host rechts: Chars tauschen, Host spielt Index 1
+      if (netz.istHost() && seite === 1) {
+        c0 = gastWahl; c1 = hostWahl; nm0 = n1; nm1 = n0;
+      }
+      kampf = Plaza.Kampf.neu(c0, c1, nm0, nm1);
       kampf.phase = 'countdown';
       kampf.countdown = 3;
       mode = 'kampf';
@@ -332,7 +351,7 @@
           ui.setStatus('Raum ' + netz.getRaum() + ' offen' + (via ? ' (' + via + ')' : '') + ' — Link teilen. Handy nicht sperren!');
           ui.showRetry(false);
         } else if (t === 'verbunden') {
-          ui.setStatus('Verbunden' + (via || netz.getTransport() ? ' über ' + (via || netz.getTransport()) : '') + '! Name prüfen, dann Charakter tippen');
+          netDown = false; ui.setStatus('Verbunden' + (via || netz.getTransport() ? ' über ' + (via || netz.getTransport()) : '') + '! Name prüfen, dann Charakter tippen');
           hostWahl = null;
           gastWahl = null;
           var nm = liesName();
@@ -341,6 +360,7 @@
           syncNameFields(nm);
           ui.fillChars(null);
           ui.showScreen('wahl');
+          if (ui.setSeiteHint) ui.setSeiteHint(seite);
           mode = 'wahl';
           ui.showRetry(false);
           netz.sende({ typ: 'join', seite: seite, name: nm });
@@ -388,14 +408,15 @@
             if (msg.seite === 1) gastName = String(msg.name).slice(0, 14);
           }
           if (netz.istHost() && (msg.typ === 'hello' || msg.typ === 'join')) {
-            ui.setStatus('Mitspieler da — Charakter wählen');
+            netDown = false; ui.setStatus('Mitspieler da — Charakter wählen');
+            if (netz.istHost()) netz.sende({ typ: 'seat', seite: seite, ver: VERSION });
             // eigenen Namen nochmal schicken
             netz.sende({ typ: 'name', seite: 0, name: hostName || liesName() });
           }
         }
         if (msg.typ === 'wahl') {
           if (msg.ver && msg.ver !== VERSION) {
-            ui.setStatus('Andere Version (' + msg.ver + ') — bitte beide hart neu laden (?v=0.8)');
+            ui.setStatus('Andere Version (' + msg.ver + ') — bitte beide hart neu laden (?v=0.9)');
           }
           if (msg.name) {
             if (msg.seite === 0) hostName = String(msg.name).slice(0, 14);
@@ -427,6 +448,17 @@
             ui.showScreen('kampf');
           }
         }
+        if ((msg.typ === 'swap' || msg.typ === 'seat') && mode !== 'kampf' && mode !== 'ende') {
+          if (typeof msg.seite === 'number') {
+            seite = msg.seite === 0 ? 1 : 0;
+            if (ui.setSeiteHint) ui.setSeiteHint(seite);
+            if (msg.typ === 'swap') {
+              ui.setStatus('Gegner hat Seite getauscht — du bist jetzt P' + (seite + 1) + '.');
+            } else if (ui.setSeiteHint) {
+              /* quiet seat sync from host */
+            }
+          }
+        }
         if (msg.typ === 'rematch' && netz.istHost() && kampf) {
           mode = 'kampf';
           ui.showScreen('kampf');
@@ -438,7 +470,8 @@
         }
       },
       onClose: function () {
-        ui.setStatus('Verbindung zu.');
+        netDown = true;
+        ui.setStatus('Verbindung weg — Tab offen lassen, „Nochmal“ tippen.');
         ui.showRetry(true);
       }
     });
@@ -505,8 +538,13 @@
         var phaseVorher = kampf.phase;
         while (acc >= STEP) {
           acc -= STEP;
-          Plaza.Kampf.setInput(kampf, 0, lokalInput);
-          Plaza.Kampf.setInput(kampf, 1, peerInput);
+          if (seite === 1) {
+            Plaza.Kampf.setInput(kampf, 1, lokalInput);
+            Plaza.Kampf.setInput(kampf, 0, peerInput);
+          } else {
+            Plaza.Kampf.setInput(kampf, 0, lokalInput);
+            Plaza.Kampf.setInput(kampf, 1, peerInput);
+          }
           Plaza.Kampf.tick(kampf);
           // Ende: tick friert ein → sofort + regelmäßig broadcasten (Bugfix: Client sah kein Ende)
           if (kampf.phase === 'ende') {
@@ -518,6 +556,7 @@
         }
         letzterSnap = Plaza.Kampf.snapshot(kampf);
         Plaza.Render.zeichne(render, letzterSnap, 0);
+        if (netDown && Plaza.Render.banner) Plaza.Render.banner(render, 'VERBINDUNG WEG — Nochmal');
         if (letzterSnap.phase === 'ende') {
           if (mode !== 'ende') {
             mode = 'ende';
@@ -531,6 +570,7 @@
         }
       } else if ((mode === 'kampf' || mode === 'ende') && letzterSnap) {
         Plaza.Render.zeichne(render, letzterSnap, seite);
+        if (netDown && Plaza.Render.banner) Plaza.Render.banner(render, 'VERBINDUNG WEG — Nochmal');
         if (letzterSnap.phase === 'ende') {
           if (mode !== 'ende') {
             mode = 'ende';
@@ -544,7 +584,7 @@
         }
         acc = 0;
       } else if (mode === 'menue') {
-        Plaza.Render.menueHint(render, 'Versus · 2 Handys · v0.8');
+        Plaza.Render.menueHint(render, 'Versus · 2 Handys · v0.9');
         acc = 0;
       } else {
         Plaza.Render.menueHint(render, statusElText());

@@ -1,4 +1,4 @@
-/* Fünf Plaza-Kämpfer: Stats, Moves, Lore, Look, winLine (v0.5). */
+/* Fünf Plaza-Kämpfer: Stats, Moves, Lore, Look, winLine (v0.9). */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -33,7 +33,7 @@
       sound: { hitPitch: 1.2 },
       winLine: 'Die Rose blutet heiß.',
       moves: {
-        light: { name: 'Tipp', dmg: 5, startup: 3, active: 2, recovery: 5, knock: 1.8, reach: 20, high: 12 },
+        light: { name: 'Tipp', dmg: 5, startup: 3, active: 2, recovery: 4, knock: 1.8, reach: 20, high: 12 },
         heavy: { name: 'Wirbeltritt', dmg: 12, startup: 6, active: 5, recovery: 11, knock: 3.8, reach: 28, high: 10,
           hits: 2, dash: 20 },
         special: { name: 'Rosenregen', dmg: 10, startup: 10, active: 8, recovery: 14, knock: 2.5, reach: 48, high: 20,
@@ -55,8 +55,8 @@
         light: { name: 'Schlag', dmg: 8, startup: 5, active: 3, recovery: 10, knock: 2.8, reach: 24, high: 16 },
         heavy: { name: 'Amboss', dmg: 20, startup: 14, active: 4, recovery: 18, knock: 6.5, reach: 28, high: 18,
           armor: { von: 10, bis: 14, hits: 1 } },
-        special: { name: 'Erdstoß', dmg: 22, startup: 15, active: 6, recovery: 20, knock: 7, reach: 30, high: 12,
-          projectile: true, proj: { typ: 'bodenwelle', vx: 2.2, life: 28, dmg: 22, knock: 7 } },
+        special: { name: 'Erdstoß', dmg: 20, startup: 15, active: 6, recovery: 22, knock: 6.5, reach: 30, high: 12,
+          projectile: true, proj: { typ: 'bodenwelle', vx: 2.2, life: 28, dmg: 20, knock: 6.5 } },
         air: { name: 'Hammerfall', dmg: 12, startup: 8, active: 4, recovery: 14, knock: 4, reach: 20, high: 18, overhead: true }
       }
     },
@@ -93,8 +93,8 @@
         light: { name: 'Stich', dmg: 5, startup: 3, active: 3, recovery: 6, knock: 2, reach: 23, high: 13 },
         heavy: { name: 'Blitzkick', dmg: 13, startup: 7, active: 4, recovery: 12, knock: 4, reach: 30, high: 14,
           dash: 32, cancel: 'special' },
-        special: { name: 'Sonnenball', dmg: 12, startup: 11, active: 10, recovery: 16, knock: 3.2, reach: 56, high: 16,
-          projectile: true, proj: { typ: 'ball', vx: 3.4, life: 55, scale: 1 } },
+        special: { name: 'Sonnenball', dmg: 13, startup: 10, active: 10, recovery: 15, knock: 3.4, reach: 56, high: 16,
+          projectile: true, proj: { typ: 'ball', vx: 3.5, life: 58, scale: 1 } },
         air: { name: 'Slide-Kick', dmg: 6, startup: 4, active: 5, recovery: 10, knock: 2.2, reach: 26, high: 10, low: true }
       }
     }

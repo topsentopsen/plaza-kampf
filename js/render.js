@@ -1,4 +1,4 @@
-/* Pixel-Canvas v0.8: detaillierte Sprites, Walk/Atk/Hurt, Hölle. */
+/* Pixel-Canvas v0.9: detaillierte Sprites, Walk/Atk/Hurt, Hölle. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -397,7 +397,7 @@
     drawLayer(ctx, layers.L5, 1.15, tick);
   }
 
-  /* ---- Figuren (v0.8 detailliert) ---- */
+  /* ---- Figuren (v0.9 detailliert) ---- */
   function schatten(ctx, x, yBoden, w, hoch) {
     var sc = Math.max(0.35, 1 - hoch / 60);
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
@@ -957,16 +957,21 @@
       ctx.fillStyle = 'rgba(0,0,0,0.45)';
       for (var t = 1; t < 10; t++) ctx.fillRect(x + (bw * t) / 10, 12, 1, bh + 2);
 
-      // Mini-Porträt
-      var px = mirror ? x + bw + 4 : x - 16;
-      ctx.fillStyle = '#0a0608';
-      ctx.fillRect(px - 1, 8, 14, 14);
-      ctx.fillStyle = c.farbe;
-      ctx.fillRect(px, 9, 12, 12);
-      ctx.fillStyle = c.haut || '#ffd7b8';
-      ctx.fillRect(px + 3, 10, 6, 5);
+      // Mini-Porträt (Kopf + Schulter + Akzent)
+      var px = mirror ? x + bw + 4 : x - 18;
+      ctx.fillStyle = '#000';
+      ctx.fillRect(px - 2, 7, 16, 16);
       ctx.fillStyle = c.farbe2;
-      ctx.fillRect(px + 2, 9, 8, 2);
+      ctx.fillRect(px - 1, 14, 14, 8);
+      ctx.fillStyle = c.farbe;
+      ctx.fillRect(px, 12, 12, 6);
+      ctx.fillStyle = c.haut || '#ffd7b8';
+      ctx.fillRect(px + 2, 8, 8, 7);
+      ctx.fillStyle = '#0a0810';
+      ctx.fillRect(px + 1, 7, 10, 3);
+      ctx.fillStyle = c.accent || '#ff6020';
+      ctx.fillRect(px + 3, 11, 2, 2);
+      ctx.fillRect(px + 7, 11, 2, 2);
 
       // Name + Spitzname
       ctx.fillStyle = '#e8c090';
@@ -1015,6 +1020,16 @@
       ctx.fillStyle = '#ffe080';
       ctx.font = '9px ' + SCHRIFT;
       ctx.fillText(snap.p[bestId].name, W / 2, 52);
+    }
+    // Special-Callout
+    for (var si = 0; si < snap.p.length; si++) {
+      if (snap.p[si].hitKind === 'special' && snap.phase === 'kampf' && (snap.tick % 20) < 12) {
+        ctx.fillStyle = '#80d8ff';
+        ctx.font = 'bold 11px ' + SCHRIFT;
+        ctx.textAlign = 'center';
+        ctx.fillText('SPECIAL!', W / 2, 64);
+        break;
+      }
     }
 
     if (snap.phase === 'ende') {
@@ -1177,6 +1192,17 @@
     ctx.fillText(text || '', W / 2, H / 2 + 4);
   }
 
+  function banner(r, text) {
+    var ctx = r.ctx;
+    applyBuf(ctx);
+    ctx.fillStyle = 'rgba(0,0,0,0.72)';
+    ctx.fillRect(20, H / 2 - 18, W - 40, 36);
+    ctx.fillStyle = '#ff4040';
+    ctx.font = 'bold 12px ' + SCHRIFT;
+    ctx.textAlign = 'center';
+    ctx.fillText(text || '…', W / 2, H / 2 + 4);
+  }
+
   function resetFx() {
     fx = []; delayHp = [1, 1]; flash = [0, 0]; prevSnap = null; shake = 0;
   }
@@ -1184,6 +1210,6 @@
   Plaza.Render = {
     W: W, H: H, puffer: function () { return BUF; },
     erstelle: erstelle, setzePuffer: setzePuffer,
-    zeichne: zeichne, menueHint: menueHint, resetFx: resetFx
+    zeichne: zeichne, menueHint: menueHint, banner: banner, resetFx: resetFx
   };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -1,4 +1,4 @@
-/* Menü, Charakterwahl, Touch-Steuerung. v0.8 */
+/* Menü, Charakterwahl, Touch-Steuerung. v0.9 */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -14,6 +14,7 @@
     var onRetry = opts.onRetry || function () {};
     var onMute = opts.onMute || function () {};
     var onFullscreen = opts.onFullscreen || function () {};
+    var onSwap = opts.onSwap || function () {};
     var getLink = opts.getLink || function () { return ''; };
 
     var overlay = root.querySelector('#overlay');
@@ -182,6 +183,13 @@
         if (Plaza.Sound) Plaza.Sound.sfx('ui');
         onRematch();
       });
+      var swapBtns = overlay.querySelectorAll('[data-act="swap"]');
+      for (var si = 0; si < swapBtns.length; si++) {
+        swapBtns[si].addEventListener('click', function () {
+          if (Plaza.Sound) Plaza.Sound.sfx('ui');
+          onSwap();
+        });
+      }
       var iosOk = root.querySelector('[data-act="ios-hint-ok"]');
       if (iosOk) iosOk.addEventListener('click', function () {
         var h = root.querySelector('#ios-hint');
@@ -225,6 +233,13 @@
     return {
       showScreen: showScreen,
       setEnde: setEnde,
+      setSeiteHint: function (seite) {
+        var el = overlay.querySelector('#seite-hint');
+        if (!el) return;
+        el.textContent = seite === 0
+          ? 'Du bist P1 (links) — Startseite.'
+          : 'Du bist P2 (rechts) — Gastseite.';
+      },
       fillChars: fillChars,
       setStatus: setStatus,
       showLink: showLink,

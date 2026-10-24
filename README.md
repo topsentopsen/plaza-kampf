@@ -1,4 +1,4 @@
-# Plaza-Kampf v0.8
+# Plaza-Kampf v0.9
 
 Dunkles Versus — *la Pelea del Infierno*. Feuer, Vulkane, ernste Street-Fighter-Chars. Statisches HTML/JS auf GitHub Pages.
 
@@ -76,3 +76,11 @@ Live: https://topsentopsen.github.io/plaza-kampf/
 - Detailliertere Charakter-Sprites (Idle/Walk/Atk/Hurt)
 - Höllen-Kampf-Musik (WebAudio Loop) · reichere Special-VFX (Feuer/Eis/Messer)
 - Cache: `?v=0.8`
+
+
+## v0.9 „Seiten, Balance, Disconnect“
+- Seite tauschen (P1↔P2) vor dem Kampf
+- Disconnect-Banner im Kampf + klarer Retry-Hinweis
+- Balance: Special-Chip höher, Toni-Special etwas entschärft, Lola/Nina Tempo
+- HUD: SPECIAL!-Callout, bessere Mini-Porträts
+- Cache: `?v=0.9`
