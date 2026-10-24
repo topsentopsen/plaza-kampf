@@ -1,4 +1,4 @@
-/* Einfache Trainings-CPU / Dummy für Solo-Testmodus. v1.3 */
+/* Einfache Trainings-CPU / Dummy für Solo-Testmodus. v1.4 (Distanzen ×4). */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -29,8 +29,8 @@
 
     // Block wenn Gegner angreift und nah
     var foeAtk = foe.atk;
-    var foeThreat = foeAtk && dist < 70;
-    if (foeThreat || (foe.stun <= 0 && dist < 36 && (rng % 7) === 0)) {
+    var foeThreat = foeAtk && dist < 280;
+    if (foeThreat || (foe.stun <= 0 && dist < 144 && (rng % 7) === 0)) {
       if (nachRechts) inp.l = true; else inp.r = true;
       // gelegentlich Duck-Block gegen Lows
       if (foeAtk && foeAtk.m && foeAtk.m.low) inp.d = true;
@@ -39,9 +39,9 @@
     }
 
     // Abstand halten / annähern
-    if (dist > 58) {
+    if (dist > 232) {
       if (nachRechts) inp.r = true; else inp.l = true;
-    } else if (dist < 22) {
+    } else if (dist < 88) {
       // leicht zurückweichen
       if (nachRechts) inp.l = true; else inp.r = true;
     } else if ((rng % 11) < 3) {
@@ -49,15 +49,15 @@
     }
 
     // Jump selten
-    if (dist > 40 && dist < 90 && (rng % 90) === 0 && me.grounded) inp.u = true;
+    if (dist > 160 && dist < 360 && (rng % 90) === 0 && me.grounded) inp.u = true;
 
     // Angriffe — nur wenn idle und im Range
-    if (me.stun <= 0 && !me.atk && me.grounded && dist < 72) {
+    if (me.stun <= 0 && !me.atk && me.grounded && dist < 288) {
       var roll = rng % 100;
       var thresh = Math.floor(aggressiv * 100);
-      if (roll < thresh * 0.45 && dist < 34) inp.a = true;
-      else if (roll < thresh * 0.65 && dist < 42) inp.b = true;
-      else if (roll < thresh * 0.78 && dist < 70) inp.c = true;
+      if (roll < thresh * 0.45 && dist < 136) inp.a = true;
+      else if (roll < thresh * 0.65 && dist < 168) inp.b = true;
+      else if (roll < thresh * 0.78 && dist < 280) inp.c = true;
       else if (roll < thresh * 0.85) inp.d = true; // duck bait
     }
 
@@ -65,7 +65,7 @@
     if (opts.dummy) {
       inp.a = false; inp.b = false; inp.u = false;
       if ((rng % 40) !== 0) inp.c = false;
-      if (dist < 50 && (rng % 3) !== 0) {
+      if (dist < 200 && (rng % 3) !== 0) {
         if (nachRechts) { inp.l = true; inp.r = false; }
         else { inp.r = true; inp.l = false; }
       }

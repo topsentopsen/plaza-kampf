@@ -1,16 +1,16 @@
-/* Autoritative Kampfsimulation (läuft auf dem Host). v1.3: Buffer + Feinschliff. */
+/* Autoritative Kampfsimulation (läuft auf dem Host). v1.4: 1280×768 Geometrie ×4. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
 
-  var ARENA_W = 320, ARENA_H = 180, BODEN = 148, GRAV = 0.38;
+  var ARENA_W = 1280, ARENA_H = 768, BODEN = 640, GRAV = 1.52;
   var TICK = 1 / 60, ROUND_ZEIT = 99;
 
   function spielerNeu(seite, charId) {
     var c = Plaza.Chars.finde(charId);
     return {
       id: seite, charId: c.id, name: c.name,
-      x: seite === 0 ? 80 : 240, y: BODEN, vx: 0, vy: 0,
+      x: seite === 0 ? 320 : 960, y: BODEN, vx: 0, vy: 0,
       facing: seite === 0 ? 1 : -1, grounded: true,
       hp: c.hp, maxHp: c.hp,
       stun: 0, crouch: false, blocking: false,
@@ -97,7 +97,7 @@
     var reach = m.reach;
     var x = p.facing > 0 ? p.x : p.x - reach;
     var high = m.high;
-    var yOff = p.crouch ? 4 : 8;
+    var yOff = p.crouch ? 16 : 32;
     return { x: x, y: p.y - high - yOff, w: reach, h: high + yOff, throw: !!m.throw, overhead: !!m.overhead, low: !!m.low };
   }
 
@@ -151,7 +151,7 @@
     // Light: kürzerer Hitstun (Kombo-Fenster), Heavy: länger
     opf.stun = m.dmg >= 14 ? (14 + Math.floor(m.dmg / 2)) : (8 + Math.floor(m.dmg / 3));
     opf.vx = ang.facing * m.knock;
-    opf.vy = m.throw ? -4.2 : (m.dmg >= 14 ? -2.2 : -1.2);
+    opf.vy = m.throw ? -16.8 : (m.dmg >= 14 ? -8.8 : -4.8);
     opf.grounded = false;
     opf.atk = null;
     opf.blocking = false;
@@ -163,8 +163,8 @@
     ang.combo = (ang.combo || 0) + 1;
     ang.comboDmg = (ang.comboDmg || 0) + m.dmg;
     if (m.throw) {
-      opf.x = ang.x + ang.facing * 28;
-      opf.y = BODEN - 10;
+      opf.x = ang.x + ang.facing * 112;
+      opf.y = BODEN - 40;
     }
     // Cancel-Fenster für Angreifer
     if (ang.atk && ang.atk.m.cancel) ang._cancel = ang.atk.m.cancel;
@@ -193,31 +193,31 @@
       var angles = pr.angles || [-0.35, 0, 0.35];
       for (var i = 0; i < angles.length; i++) {
         var ang = angles[i];
-        var spd = pr.spd || 2.4;
+        var spd = pr.spd || 9.6;
         st.projektil.push(ext(base, {
-          x: p.x + p.facing * 14, y: p.y - 18,
+          x: p.x + p.facing * 56, y: p.y - 72,
           vx: p.facing * Math.cos(ang) * spd,
           vy: Math.sin(ang) * spd,
-          w: 8, h: 8, life: pr.life || 40
+          w: 32, h: 32, life: pr.life || 40
         }));
       }
       return;
     }
     if (typ === 'bodenwelle') {
       st.projektil.push(ext(base, {
-        x: p.x + p.facing * 12, y: BODEN - 4,
-        vx: p.facing * (pr.vx || 2.2), vy: 0,
-        w: 14, h: 8, life: pr.life || 28, low: true
+        x: p.x + p.facing * 48, y: BODEN - 16,
+        vx: p.facing * (pr.vx || 8.8), vy: 0,
+        w: 56, h: 32, life: pr.life || 28, low: true
       }));
       return;
     }
     // Standard-Ball / ladbarer Sonnenball
     var scale = pr.scale || 1;
     st.projektil.push(ext(base, {
-      x: p.x + p.facing * 16, y: p.y - 18,
-      vx: p.facing * (pr.vx || 3.2) * scale,
+      x: p.x + p.facing * 64, y: p.y - 72,
+      vx: p.facing * (pr.vx || 12.8) * scale,
       vy: pr.vy || 0,
-      w: Math.round(10 * scale), h: Math.round(8 * scale),
+      w: Math.round(40 * scale), h: Math.round(32 * scale),
       life: pr.life || 50,
       dmg: Math.round(base.dmg * scale)
     }));
@@ -261,7 +261,7 @@
         p.vx = dir * c.speed * 0.35;
       } else {
         p.vx *= 0.7;
-        if (Math.abs(p.vx) < 0.05) p.vx = 0;
+        if (Math.abs(p.vx) < 0.2) p.vx = 0;
       }
       if (inp.u && !p.prev.u && p.grounded && !p.crouch) {
         p.vy = -c.jump;
@@ -313,8 +313,8 @@
       p.y = BODEN; p.vy = 0; p.grounded = true;
     } else p.grounded = false;
     var half = c.w / 2;
-    if (p.x < half + 8) p.x = half + 8;
-    if (p.x > ARENA_W - half - 8) p.x = ARENA_W - half - 8;
+    if (p.x < half + 32) p.x = half + 32;
+    if (p.x > ARENA_W - half - 32) p.x = ARENA_W - half - 32;
   }
 
   function updateTreffer(st) {
@@ -349,7 +349,7 @@
     for (i = st.projektil.length - 1; i >= 0; i--) {
       var pr = st.projektil[i];
       pr.x += pr.vx; pr.y += pr.vy || 0; pr.life--;
-      if (pr.life <= 0 || pr.x < -20 || pr.x > ARENA_W + 20) {
+      if (pr.life <= 0 || pr.x < -80 || pr.x > ARENA_W + 80) {
         st.projektil.splice(i, 1);
         continue;
       }
@@ -381,9 +381,9 @@
   function trenne(st) {
     var a = st.p[0], b = st.p[1];
     var ca = Plaza.Chars.finde(a.charId), cb = Plaza.Chars.finde(b.charId);
-    var minDist = (ca.w + cb.w) / 2 + 2;
+    var minDist = (ca.w + cb.w) / 2 + 8;
     var dx = b.x - a.x;
-    if (Math.abs(dx) < minDist && Math.abs(a.y - b.y) < 20) {
+    if (Math.abs(dx) < minDist && Math.abs(a.y - b.y) < 80) {
       var push = (minDist - Math.abs(dx)) / 2;
       var s = dx >= 0 ? 1 : -1;
       a.x -= s * push; b.x += s * push;
