@@ -2121,7 +2121,9 @@
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
   }
 
+  var FX_MAX = 48; /* v2.6 Perf-Cap */
   function spawnFx(kind, x, y, col, vx, vy) {
+    if (fx.length >= FX_MAX) fx.splice(0, fx.length - FX_MAX + 1);
     fx.push({ kind: kind, x: x, y: y, t: 0, col: col || '#fff8ee', vx: vx || 0, vy: vy || 0, seed: (fxSeq++) * 977 + (x | 0) });
   }
 

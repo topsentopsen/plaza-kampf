@@ -1,4 +1,4 @@
-# Plaza-Kampf v2.5
+# Plaza-Kampf v2.6
 
 Dunkles Versus — *la Pelea del Infierno*. Feuer, Vulkane, ernste Street-Fighter-Chars. Statisches HTML/JS auf GitHub Pages.
 
@@ -109,9 +109,9 @@ Live: https://topsentopsen.github.io/plaza-kampf/
 - Cache: `?v=1.2`
 
 
-## v2.5 „Allein üben“
+## v2.6 „Allein üben“
 - Testmodus ohne zweites Handy: Menü → **Allein üben**
 - Lokaler Kampf gegen einfache CPU (Dummy-Anteile: Block/Abstand)
 - Charakterwahl + Name wie online; Rematch & Menü am Ende
 - Online-Versus unverändert
-- Cache: `?v=2.5`
+- Cache: `?v=2.6`
