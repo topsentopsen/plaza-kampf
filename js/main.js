@@ -65,16 +65,13 @@
       },
       onWahl: function (id) {
         meinChar = id;
+        if (netz && netz.istHost()) hostWahl = id;
+        else gastWahl = id;
         if (netz && netz.istBereit()) {
           netz.sende({ typ: 'wahl', charId: id, seite: seite });
         }
-        if (netz && netz.istHost()) {
-          hostWahl = id;
-          versucheStart();
-        } else {
-          gastWahl = id;
-          ui.setStatus('Warte auf den Host…');
-        }
+        ui.setStatus('Gewählt: ' + Plaza.Chars.finde(id).name + ' — warte auf den anderen…');
+        if (netz && netz.istHost()) versucheStart();
       },
       onRematch: function () {
         if (netz && netz.istHost() && kampf) {
@@ -127,18 +124,13 @@
             history.replaceState(null, '', '?raum=' + encodeURIComponent(netz.getRaum()) + '&v=0.1');
           } catch (e) {}
         } else if (t === 'verbunden') {
-          ui.setStatus('Verbunden! Charakter wählen');
-          ui.fillChars(meinChar);
+          ui.setStatus('Verbunden! Tippe deinen Charakter');
+          hostWahl = null;
+          gastWahl = null;
+          ui.fillChars(null);
           ui.showScreen('wahl');
           mode = 'wahl';
-          if (netz.istHost()) {
-            hostWahl = meinChar;
-            netz.sende({ typ: 'join', seite: 1 });
-          } else {
-            gastWahl = meinChar;
-            netz.sende({ typ: 'join', seite: 1, charId: meinChar });
-            netz.sende({ typ: 'wahl', charId: meinChar, seite: 1 });
-          }
+          netz.sende({ typ: 'join', seite: seite });
         } else if (t === 'fehler') {
           var err = (extra && extra.err) || '';
           var hinweis = 'Verbindung fehlgeschlagen (' + err + '). ';
@@ -265,15 +257,6 @@
     skalieren();
     requestAnimationFrame(loop);
 
-    // Host sendet eigene Wahl beim Öffnen der Wahl-Seite
-    var _fill = ui.fillChars;
-    ui.fillChars = function (id) {
-      _fill(id);
-      if (netz && netz.istHost()) {
-        hostWahl = id || meinChar;
-        netz.sende({ typ: 'wahl', charId: hostWahl, seite: 0 });
-      }
-    };
   }
 
   if (document.readyState === 'loading') {
