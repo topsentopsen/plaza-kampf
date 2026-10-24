@@ -1,8 +1,8 @@
-/* Einstieg, Spielschleife, Host/Client-Logik. v1.2 */
+/* Einstieg, Spielschleife, Host/Client-Logik. v1.3 — Solo/Testmodus. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION = 'v1.2';
+  var VERSION = 'v1.3';
   Plaza.VERSION = VERSION;
 
   function params() {
@@ -35,6 +35,7 @@
     var meinName = '';
     var hostName = '';
     var gastName = '';
+    var soloMode = false;
     var netDown = false;
     try {
       meinName = (localStorage.getItem('plazaName') || '').trim().slice(0, 14);
@@ -223,7 +224,39 @@
     var ui = Plaza.UI.erstelle({
       root: document.body,
       getLink: function () { return netz ? netz.linkFuer(null, false) : ''; },
+      onSolo: function () {
+        soloMode = true;
+        netDown = false;
+        seite = 0;
+        hostName = liesName();
+        meinName = hostName;
+        gastName = 'CPU';
+        hostWahl = null;
+        gastWahl = null;
+        kampf = null;
+        letzterSnap = null;
+        meinChar = null;
+        ui.fillChars(null);
+        ui.showScreen('wahl');
+        if (ui.setSeiteHint) ui.setSeiteHint(0);
+        mode = 'wahl';
+        ui.setStatus('Testmodus: Charakter wählen — du kämpfst gegen die CPU.');
+        try { if (Plaza.Sound) Plaza.Sound.init(); } catch (eS) {}
+      },
+      onMenue: function () {
+        soloMode = false;
+        kampf = null;
+        letzterSnap = null;
+        hostWahl = null;
+        gastWahl = null;
+        meinChar = null;
+        mode = 'menue';
+        ui.showScreen('menue');
+        ui.setStatus('');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v1.3');
+      },
       onHost: function () {
+        soloMode = false;
         seite = 0;
         hostName = liesName();
         meinName = hostName;
@@ -233,6 +266,7 @@
         ui.showRetry(false);
       },
       onJoin: function (raum) {
+        soloMode = false;
         var code = (raum || pendingRaum || '').trim();
         if (!code) {
           ui.setStatus('Bitte Raum-Code eingeben');
@@ -263,6 +297,10 @@
         requestFs();
       },
       onSwap: function () {
+        if (soloMode) {
+          ui.setStatus('Im Testmodus bist du immer P1 (links).');
+          return;
+        }
         // Nur vor Kampf: eigene Seite umkehren (Host bleibt sim-autoritativ auf Index 0/1 via seite)
         if (mode === 'kampf' || mode === 'ende') {
           ui.setStatus('Seiten nur vor dem Kampf tauschen.');
@@ -278,6 +316,15 @@
       onWahl: function (id) {
         meinChar = id;
         var nm = liesName();
+        if (soloMode) {
+          hostWahl = id;
+          hostName = nm || hostName || 'Spieler';
+          gastWahl = Plaza.KI ? Plaza.KI.zufallsGegner(id) : 'toni';
+          gastName = 'CPU';
+          ui.setStatus('Gewählt: ' + Plaza.Chars.finde(id).name + ' vs CPU (' + Plaza.Chars.finde(gastWahl).name + ')');
+          startSolo();
+          return;
+        }
         if (netz && netz.istHost()) { hostWahl = id; hostName = nm || hostName; }
         else { gastWahl = id; gastName = nm || gastName; }
         if (netz && netz.istBereit()) {
@@ -287,6 +334,17 @@
         if (netz && netz.istHost()) versucheStart();
       },
       onRematch: function () {
+        if (soloMode && kampf) {
+          kampf = Plaza.Kampf.rematch(kampf);
+          kampf.phase = 'countdown';
+          kampf.countdown = 3;
+          kampf.tick = 0;
+          mode = 'kampf';
+          ui.showScreen('kampf');
+          if (Plaza.Sound) Plaza.Sound.resetDiff();
+          if (Plaza.Render.resetFx) Plaza.Render.resetFx();
+          return;
+        }
         if (netz && netz.istHost() && kampf) {
           kampf = Plaza.Kampf.rematch(kampf);
           kampf.phase = 'countdown';
@@ -331,6 +389,25 @@
       if (Plaza.Sound) Plaza.Sound.resetDiff();
       if (Plaza.Render.resetFx) Plaza.Render.resetFx();
       broadcast();
+    }
+
+    function startSolo() {
+      if (!soloMode || !hostWahl || !gastWahl) return;
+      var n0 = hostName || Plaza.Chars.finde(hostWahl).name;
+      var n1 = gastName || 'CPU';
+      kampf = Plaza.Kampf.neu(hostWahl, gastWahl, n0, n1);
+      kampf.phase = 'countdown';
+      kampf.countdown = 3;
+      seite = 0;
+      mode = 'kampf';
+      ui.showScreen('kampf');
+      _skKey = '';
+      tryFullscreen();
+      skalieren();
+      if (Plaza.Sound) Plaza.Sound.resetDiff();
+      if (Plaza.Render.resetFx) Plaza.Render.resetFx();
+      letzterSnap = Plaza.Kampf.snapshot(kampf);
+      ui.setStatus('Testmodus vs CPU — Moves ausprobieren!');
     }
 
     function broadcast() {
@@ -507,7 +584,14 @@
     canvas.addEventListener('pointerdown', function () {
       if (Plaza.Sound) Plaza.Sound.resume();
       if (letzterSnap && letzterSnap.phase === 'ende') {
-        if (netz && netz.istHost() && kampf) {
+        if (soloMode && kampf) {
+          kampf = Plaza.Kampf.rematch(kampf);
+          kampf.phase = 'countdown';
+          kampf.countdown = 3;
+          kampf.tick = 0;
+          mode = 'kampf';
+          ui.showScreen('kampf');
+        } else if (netz && netz.istHost() && kampf) {
           kampf = Plaza.Kampf.rematch(kampf);
           kampf.phase = 'countdown';
           kampf.countdown = 3;
@@ -534,7 +618,31 @@
       acc += dt;
       skalieren();
 
-      if (mode === 'kampf' && netz && netz.istHost() && kampf) {
+      if (soloMode && (mode === 'kampf' || mode === 'ende') && kampf) {
+        while (acc >= STEP) {
+          acc -= STEP;
+          var cpuInp = Plaza.KI
+            ? Plaza.KI.denk(kampf, 1, { aggressiv: 0.5, dummy: false })
+            : { l: false, r: false, u: false, d: false, a: false, b: false, c: false };
+          Plaza.Kampf.setInput(kampf, 0, lokalInput);
+          Plaza.Kampf.setInput(kampf, 1, cpuInp);
+          Plaza.Kampf.tick(kampf);
+        }
+        letzterSnap = Plaza.Kampf.snapshot(kampf);
+        Plaza.Render.zeichne(render, letzterSnap, 0);
+        if (letzterSnap.phase === 'ende') {
+          if (mode !== 'ende') {
+            mode = 'ende';
+            var wonS = letzterSnap.sieger === 0;
+            if (ui.setEnde) ui.setEnde(wonS ? 'GEWONNEN!' : (letzterSnap.sieger != null ? 'VERLOREN!' : 'Ende'),
+              (letzterSnap.nachricht || '') + ' (Testmodus)');
+            ui.showScreen('ende');
+          }
+        } else if (mode === 'ende') {
+          mode = 'kampf';
+          ui.showScreen('kampf');
+        }
+      } else if (mode === 'kampf' && netz && netz.istHost() && kampf) {
         var phaseVorher = kampf.phase;
         while (acc >= STEP) {
           acc -= STEP;
@@ -584,7 +692,7 @@
         }
         acc = 0;
       } else if (mode === 'menue') {
-        Plaza.Render.menueHint(render, 'Versus · 2 Handys · v1.2');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v1.3');
         acc = 0;
       } else {
         Plaza.Render.menueHint(render, statusElText());
@@ -625,7 +733,7 @@
     document.addEventListener('webkitfullscreenchange', function () { updateFsButton(); _skKey = ''; skalieren(); });
     skalieren();
     if ('serviceWorker' in navigator) {
-      try { navigator.serviceWorker.register('sw.js?v=1.2'); } catch (eSw) {}
+      try { navigator.serviceWorker.register('sw.js?v=1.3'); } catch (eSw) {}
     }
     requestAnimationFrame(loop);
   }

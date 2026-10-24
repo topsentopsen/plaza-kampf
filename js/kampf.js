@@ -1,4 +1,4 @@
-/* Autoritative Kampfsimulation (läuft auf dem Host). v1.2: Buffer + Feinschliff. */
+/* Autoritative Kampfsimulation (läuft auf dem Host). v1.3: Buffer + Feinschliff. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};

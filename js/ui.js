@@ -1,4 +1,4 @@
-/* Menü, Charakterwahl, Touch-Steuerung. v1.2 */
+/* Menü, Charakterwahl, Touch-Steuerung. v1.3 */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -15,6 +15,8 @@
     var onMute = opts.onMute || function () {};
     var onFullscreen = opts.onFullscreen || function () {};
     var onSwap = opts.onSwap || function () {};
+    var onSolo = opts.onSolo || function () {};
+    var onMenue = opts.onMenue || function () {};
     var getLink = opts.getLink || function () { return ''; };
 
     var overlay = root.querySelector('#overlay');
@@ -163,6 +165,16 @@
       if (hostBtn) hostBtn.addEventListener('click', function () {
         if (Plaza.Sound) { Plaza.Sound.init(); Plaza.Sound.sfx('ui'); }
         onHost();
+      });
+      var soloBtn = overlay.querySelector('[data-act="solo"]');
+      if (soloBtn) soloBtn.addEventListener('click', function () {
+        if (Plaza.Sound) { Plaza.Sound.init(); Plaza.Sound.sfx('ui'); }
+        onSolo();
+      });
+      var menueBtn = overlay.querySelector('[data-act="menue"]');
+      if (menueBtn) menueBtn.addEventListener('click', function () {
+        if (Plaza.Sound) Plaza.Sound.sfx('ui');
+        onMenue();
       });
       if (joinBtn) joinBtn.addEventListener('click', function () {
         if (Plaza.Sound) { Plaza.Sound.init(); Plaza.Sound.sfx('ui'); }
