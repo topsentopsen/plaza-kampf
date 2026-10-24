@@ -1,4 +1,4 @@
-/* Einfache Trainings-CPU / Dummy für Solo-Testmodus. v1.4 (Distanzen ×4). */
+/* Einfache Trainings-CPU / Dummy für Solo-Testmodus. v2.0 (Special-Cooldown, Distanzen ×4). */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -51,13 +51,17 @@
     // Jump selten
     if (dist > 160 && dist < 360 && (rng % 90) === 0 && me.grounded) inp.u = true;
 
-    // Angriffe — nur wenn idle und im Range
+    // Angriffe — nur wenn idle und im Range; Special mit Cooldown (~90 Ticks)
     if (me.stun <= 0 && !me.atk && me.grounded && dist < 288) {
       var roll = rng % 100;
       var thresh = Math.floor(aggressiv * 100);
+      var specialReady = (tick - (me._kiSpecialAt || -999)) > 90;
       if (roll < thresh * 0.45 && dist < 136) inp.a = true;
       else if (roll < thresh * 0.65 && dist < 168) inp.b = true;
-      else if (roll < thresh * 0.78 && dist < 280) inp.c = true;
+      else if (specialReady && roll < thresh * 0.78 && dist < 280) {
+        inp.c = true;
+        me._kiSpecialAt = tick;
+      }
       else if (roll < thresh * 0.85) inp.d = true; // duck bait
     }
 

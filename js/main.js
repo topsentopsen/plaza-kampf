@@ -1,8 +1,8 @@
-/* Einstieg, Spielschleife, Host/Client-Logik. v1.9 — Solo/Testmodus. */
+/* Einstieg, Spielschleife, Host/Client-Logik. v2.0 — Solo/Testmodus. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION = 'v1.9';
+  var VERSION = 'v2.0';
   Plaza.VERSION = VERSION;
 
   function params() {
@@ -253,7 +253,7 @@
         mode = 'menue';
         ui.showScreen('menue');
         ui.setStatus('');
-        Plaza.Render.menueHint(render, 'Versus · Solo · v1.9');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v2.0');
       },
       onHost: function () {
         soloMode = false;
@@ -493,7 +493,7 @@
         }
         if (msg.typ === 'wahl') {
           if (msg.ver && msg.ver !== VERSION) {
-            ui.setStatus('Andere Version (' + msg.ver + ') — bitte beide hart neu laden (?v=1.0)');
+            ui.setStatus('Andere Version (' + msg.ver + ') — bitte beide hart neu laden (?v=' + (Plaza.Netz && Plaza.Netz.VERSION_Q ? Plaza.Netz.VERSION_Q : '2.0') + ')');
           }
           if (msg.name) {
             if (msg.seite === 0) hostName = String(msg.name).slice(0, 14);
@@ -692,7 +692,7 @@
         }
         acc = 0;
       } else if (mode === 'menue') {
-        Plaza.Render.menueHint(render, 'Versus · Solo · v1.9');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v2.0');
         acc = 0;
       } else {
         Plaza.Render.menueHint(render, statusElText());
@@ -733,7 +733,7 @@
     document.addEventListener('webkitfullscreenchange', function () { updateFsButton(); _skKey = ''; skalieren(); });
     skalieren();
     if ('serviceWorker' in navigator) {
-      try { navigator.serviceWorker.register('sw.js?v=1.9'); } catch (eSw) {}
+      try { navigator.serviceWorker.register('sw.js?v=2.0'); } catch (eSw) {}
     }
     requestAnimationFrame(loop);
   }
