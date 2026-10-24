@@ -15,6 +15,12 @@
   var camX = 0;
   var shake = 0;
 
+  /* ==== v1.6 Arena — Drop-in für js/render.js ====
+   * Ersetzt in render.js den Block von `function P()` (Z. 18) bis direkt vor
+   * `/* ---- Figuren` (Z. 422). P/backe/applyBuf/setzePuffer/erstelle sind
+   * unverändert übernommen, alles ab `backeLayers` ist neu und nativ 1280×768.
+   * Benutzt aus dem Modul-Scope: W, H, BUF, SCHRIFT, layers, camX, Plaza.
+   */
   function P() { return Plaza.Palette || {}; }
 
   function backe(w, h, fn) {
@@ -62,363 +68,771 @@
     return { canvas: canvas, ctx: ctx, w: W, h: H, buf: BUF };
   }
 
+  /* ---- Arena v1.6: nativ, 1 Layer-Pixel = 1 Canvas-Pixel ---- */
+  var LW = 1440;                 // 1280 + 2×80 Kamera-Spiel
+  var CAM_MAX = 64;              // ±64 (nicht 80): L5 (×1.15) deckt sonst den Rand nicht
+  var PAR = { L0: 0.10, L1: 0.25, L2: 0.45, L3: 0.70, L4: 1.0, L5: 1.15 };
+  // 12-Stufen-Glutrampe (Plaza.Palette.glut überschreibt, falls vorhanden)
+  var GLUT_DEF = ['#050208', '#0c0510', '#160810', '#220a0c', '#34100a', '#4a1808',
+    '#6a1c08', '#9a2408', '#d03010', '#ff4a18', '#ff9a38', '#fff0c0'];
+  var MOND = { x: 1120, y: 200, r: 100 };                     // L0
+  var KRATER = [[280, 270], [780, 196], [1300, 286]];         // L1, Vulkan-Spitzen
+  var GLOCKE = { x: 875, y: 236 };                            // L2
+  var NEON = { x: 540, y: 300 };                              // L2, Schild „PLAZA“
+  var BRUNNEN = { x: 600, top: 362, schale: 431 };            // L3
+  var KIOSK = { x: 1120, y: 432 };                            // L3, Feuerbecken
+  var PUBLIKUM = [[404, 468, 0], [446, 474, 1], [748, 470, 1], [790, 466, 0], [836, 474, 1],
+    [960, 468, 0], [1010, 472, 1], [1214, 466, 0], [1262, 474, 1]];  // L3: x, y-oben, Sprite
+  var FACKELN = [130, 1310];                                  // L5-x, Flamme bei y 572
+  var FLAMME = [
+    [[-10, -22, 20, 22, '#d03010'], [-6, -34, 12, 30, '#ff7a28'], [-2, -24, 6, 18, '#fff0c0']],
+    [[-12, -20, 22, 20, '#d03010'], [-4, -38, 10, 34, '#ff7a28'], [0, -26, 6, 18, '#fff0c0']],
+    [[-8, -24, 18, 24, '#d03010'], [-8, -32, 12, 28, '#ff7a28'], [-4, -28, 6, 20, '#fff0c0']]
+  ];
+  var arenaSnap = null, hopT = 0, hitSeqAlt = null;
+
+  function rng(seed) {
+    return function () {
+      seed = (seed + 0x6D2B79F5) | 0;
+      var t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  // Pixel-Werkzeuge für einen Back-Kontext: alles auf 2-px-Raster, keine AA-Kanten
+  function werkzeug(x) {
+    var pats = {};
+    function R(px, py, w, h, c) { if (c) x.fillStyle = c; x.fillRect(Math.round(px), Math.round(py), Math.round(w), Math.round(h)); }
+    function pat(c, lvl) {
+      var k = c + lvl;
+      if (pats[k]) return pats[k];
+      var n = lvl === 12 ? 8 : 4;
+      var cv = backe(n, n, function (q) {
+        q.fillStyle = c;
+        q.fillRect(0, 0, 2, 2);
+        if (lvl !== 25) q.fillRect(n / 2, n / 2, 2, 2);
+      });
+      pats[k] = x.createPattern(cv, 'repeat');
+      return pats[k];
+    }
+    function ell(cx, cy, rx, ry, c) {
+      x.fillStyle = c;
+      for (var yy = -ry; yy < ry; yy += 2) {
+        var t = (yy + 1) / ry;
+        var hw = Math.round(rx * Math.sqrt(Math.max(0, 1 - t * t)) / 2) * 2;
+        if (hw > 0) x.fillRect(Math.round(cx - hw), Math.round(cy + yy), hw * 2, 2);
+      }
+    }
+    function ellPfad(cx, cy, rx, ry) {
+      x.beginPath();
+      for (var yy = -ry; yy < ry; yy += 2) {
+        var t = (yy + 1) / ry;
+        var hw = Math.round(rx * Math.sqrt(Math.max(0, 1 - t * t)) / 2) * 2;
+        if (hw > 0) x.rect(Math.round(cx - hw), Math.round(cy + yy), hw * 2, 2);
+      }
+    }
+    function poly(pts, c) {
+      x.fillStyle = c;
+      var y0 = 1e9, y1 = -1e9, i, j;
+      for (i = 0; i < pts.length; i++) { y0 = Math.min(y0, pts[i][1]); y1 = Math.max(y1, pts[i][1]); }
+      for (var yy = Math.floor(y0 / 2) * 2; yy < y1; yy += 2) {
+        var sy = yy + 1, xs = [];
+        for (i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+          var a = pts[i], b = pts[j];
+          if ((a[1] > sy) !== (b[1] > sy)) xs.push(a[0] + (sy - a[1]) / (b[1] - a[1]) * (b[0] - a[0]));
+        }
+        xs.sort(function (m, n) { return m - n; });
+        for (var k = 0; k + 1 < xs.length; k += 2) {
+          var xa = Math.round(xs[k] / 2) * 2, xb = Math.round(xs[k + 1] / 2) * 2;
+          if (xb > xa) x.fillRect(xa, yy, xb - xa, 2);
+        }
+      }
+    }
+    // 2-px-Kontur: Form 4× versetzt in Schwarz, dann gefüllt
+    function kpoly(pts, c) {
+      var d = [[-2, 0], [2, 0], [0, -2], [0, 2]];
+      for (var i = 0; i < 4; i++) poly(pts.map(function (p) { return [p[0] + d[i][0], p[1] + d[i][1]]; }), '#000');
+      poly(pts, c);
+    }
+    function kR(px, py, w, h, c) { R(px - 2, py - 2, w + 4, h + 4, '#000'); R(px, py, w, h, c); }
+    // Linie aus 2-px-Blöcken (Treppen-Look)
+    function linie(x0, y0, x1, y1, d, c) {
+      x.fillStyle = c;
+      var n = Math.max(1, Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) / 2));
+      for (var i = 0; i <= n; i++) {
+        var t = i / n;
+        x.fillRect(Math.round((x0 + (x1 - x0) * t) / 2) * 2, Math.round((y0 + (y1 - y0) * t) / 2) * 2, d, d);
+      }
+    }
+    // Abdunkeln/Tönen nur auf bereits gemalten Pixeln, in 8-px-Stufen
+    function toene(y0, y1, a0, a1, c) {
+      x.save();
+      x.globalCompositeOperation = 'source-atop';
+      x.fillStyle = c || '#050208';
+      for (var yy = y0; yy < y1; yy += 8) {
+        x.globalAlpha = Math.max(0, Math.min(1, a0 + (a1 - a0) * (yy - y0) / Math.max(1, y1 - y0)));
+        x.fillRect(0, yy, x.canvas.width, 8);
+      }
+      x.restore();
+    }
+    return { R: R, pat: pat, ell: ell, ellPfad: ellPfad, poly: poly, kpoly: kpoly, kR: kR, linie: linie, toene: toene, x: x };
+  }
+
   function backeLayers() {
-    var LW = 360;
     var pal = P();
+    var G = pal.glut || GLUT_DEF;
+
+    /* L0 Himmel (Faktor 0.10): Glutbänder, Blutmond, Funken-Sterne, Rauch */
     var L0 = backe(LW, H, function (x, w, h) {
+      var t = werkzeug(x), r = rng(100);
       var BAND = pal.himmel || ['#050208', '#0a0612', '#120810', '#1a0a0c', '#220c0a', '#2a1008', '#3a1408', '#4a1808'];
-      var bh = Math.ceil(h / BAND.length);
-      for (var i = 0; i < BAND.length; i++) {
-        x.fillStyle = BAND[i];
-        x.fillRect(0, i * bh, w, bh + 1);
-        if (i) {
-          x.fillStyle = BAND[i - 1];
-          for (var px = 0; px < w; px += 2) x.fillRect(px + (i % 2), i * bh + ((px / 2) % 2), 1, 1);
+      var bh = 45, i;
+      for (i = 0; i < 8; i++) {
+        t.R(0, i * bh, w, bh, BAND[i]);
+        if (i) {   // 4-px-Dither-Übergang: 50 % → 25 % → 12 %
+          t.R(0, i * bh, w, 8, t.pat(BAND[i - 1], 50));
+          t.R(0, i * bh + 8, w, 8, t.pat(BAND[i - 1], 25));
+          t.R(0, i * bh + 16, w, 8, t.pat(BAND[i - 1], 12));
         }
       }
-      // Blutmond
-      x.fillStyle = pal.sonneGlow || '#5a1808';
-      x.beginPath(); x.arc(290, 36, 26, 0, Math.PI * 2); x.fill();
-      x.fillStyle = pal.sonne || '#ff4a18';
-      x.beginPath(); x.arc(290, 36, 16, 0, Math.PI * 2); x.fill();
-      x.fillStyle = '#2a0808';
-      x.beginPath(); x.arc(296, 32, 10, 0, Math.PI * 2); x.fill(); // Mondschatten
-      // Sterne / Funken
-      x.fillStyle = '#ff6020';
-      for (var s = 0; s < 18; s++) x.fillRect((s * 37 + 11) % w, 8 + (s * 13) % 50, 1, 1);
-      // Rauchfahnen
-      x.fillStyle = 'rgba(20,10,18,0.55)';
-      x.beginPath(); x.ellipse(80, 40, 40, 12, -0.2, 0, Math.PI * 2); x.fill();
-      x.beginPath(); x.ellipse(200, 28, 50, 14, 0.1, 0, Math.PI * 2); x.fill();
+      t.R(0, 360, w, h - 360, G[5]);                 // Horizont-Glut
+      t.R(0, 360, w, 8, t.pat(BAND[7], 50));
+      t.R(0, 368, w, 8, t.pat(BAND[7], 25));
+      t.R(0, 392, w, 8, t.pat(G[6], 12));
+      t.R(0, 400, w, 8, t.pat(G[6], 25));
+      // Funken-Sterne
+      for (i = 0; i < 90; i++) {
+        var sx = Math.round(r() * w / 2) * 2, sy = Math.round(r() * 160) * 2;
+        var dx = sx - MOND.x, dy = sy - MOND.y;
+        if (dx * dx + dy * dy < 170 * 170) continue;
+        var k = r();
+        if (k < 0.12) {   // Kreuz-Funke
+          t.R(sx, sy - 2, 2, 6, G[8]); t.R(sx - 2, sy, 6, 2, G[8]); t.R(sx, sy, 2, 2, G[10]);
+        } else t.R(sx, sy, 2, 2, k < 0.5 ? G[6] : (k < 0.85 ? G[7] : '#ff6020'));
+      }
+      // Rauchfahnen (3), knapp über Himmelston
+      function rauch(x0, y0, x1, y1, r0, r1, ph) {
+        for (var s = 0; s <= 24; s++) {
+          var q = s / 24, rr = r0 + (r1 - r0) * q;
+          var cx = x0 + (x1 - x0) * q, cy = y0 + (y1 - y0) * q + Math.sin(q * 6 + ph) * 14;
+          t.ell(cx, cy, rr * 1.6, rr * 0.7, t.pat('#140a14', 50));
+          t.ell(cx + 4, cy + 2, rr * 1.1, rr * 0.45, '#120812');
+        }
+      }
+      rauch(250, 300, 640, 120, 14, 40, 0);
+      rauch(720, 230, 1000, 70, 18, 46, 2);
+      rauch(1330, 310, 1440, 210, 12, 30, 4);
+      // Blutmond r≈104: Halo, Körper, Krater, Schatten-Sichel
+      var mx = MOND.x, my = MOND.y, mr = MOND.r;
+      t.ell(mx, my, mr + 50, mr + 50, t.pat(G[5], 25));
+      t.ell(mx, my, mr + 26, mr + 26, t.pat(G[6], 50));
+      t.ell(mx, my, mr + 8, mr + 8, G[6]);
+      t.ell(mx, my, mr, mr, '#c02a08');
+      x.save();
+      t.ellPfad(mx, my, mr, mr); x.clip();
+      t.ell(mx - 16, my - 16, mr - 16, mr - 16, G[8]);
+      t.ell(mx - 34, my - 38, 44, 40, t.pat(G[9], 50));
+      t.ell(mx - 40, my - 44, 22, 20, G[9]);
+      var KR = [[-50, -10, 16], [-10, -50, 12], [20, 10, 22], [-30, 40, 14], [40, -30, 10], [10, 60, 10], [-64, 30, 8], [60, 40, 12]];
+      for (i = 0; i < KR.length; i++) {
+        var kx = mx + KR[i][0], ky = my + KR[i][1], kr = KR[i][2];
+        t.ell(kx - 2, ky - 2, kr, kr * 0.8, '#ff6a28');
+        t.ell(kx, ky, kr, kr * 0.8, G[7]);
+        t.ell(kx + 2, ky + 2, kr * 0.7, kr * 0.55, G[6]);
+      }
+      t.ell(mx + 46, my + 18, mr, mr, t.pat('#3a0c08', 50));
+      t.ell(mx + 62, my + 26, mr - 4, mr - 4, '#2a0808');
+      t.ell(mx + 70, my + 30, mr - 10, mr - 10, t.pat('#1a0606', 50));
+      x.restore();
     });
 
+    /* L1 Fern (0.25): Vulkane mit Krater-Glow + Rinnsal, Lava-Meer, Aschehügel */
     var L1 = backe(LW, H, function (x, w, h) {
-      // Lava-Meer
-      x.fillStyle = pal.meer || '#1a0808';
-      x.fillRect(0, 78, w, 22);
-      x.fillStyle = pal.lavaDunkel || '#8a1800';
-      for (var sx = 0; sx < w; sx += 8) x.fillRect(sx, 82 + (sx % 5), 5, 2);
-      x.fillStyle = pal.lava || '#ff3a08';
-      for (var sx2 = 0; sx2 < w; sx2 += 14) x.fillRect(sx2 + 2, 84 + (sx2 % 7), 3, 1);
-      // Vulkan-Silhouetten
-      function vulkan(vx, baseY, bw, peakH, glow) {
-        x.fillStyle = '#0c0608';
-        x.beginPath();
-        x.moveTo(vx - bw, baseY);
-        x.lineTo(vx - 8, baseY - peakH);
-        x.lineTo(vx + 8, baseY - peakH);
-        x.lineTo(vx + bw, baseY);
-        x.fill();
-        // Krater-Glow
-        x.fillStyle = glow || '#ff3a08';
-        x.fillRect(vx - 6, baseY - peakH - 2, 12, 4);
-        x.fillStyle = '#ffb040';
-        x.fillRect(vx - 3, baseY - peakH - 4, 6, 3);
-        // Lava-Rinnsal
-        x.fillStyle = '#ff3a08';
-        x.fillRect(vx - 2, baseY - peakH + 2, 2, peakH - 8);
-        x.fillRect(vx + 3, baseY - peakH + 10, 2, peakH - 18);
+      var t = werkzeug(x), r = rng(200), i;
+      function vulkan(vx, py, bw, cw) {
+        var hh = 420 - py;
+        t.ell(vx, py - 14, cw + 40, 34, t.pat(G[6], 25));       // Glow über Krater
+        t.ell(vx, py - 6, cw + 18, 16, t.pat(G[7], 50));
+        var pts = [[vx - bw, 424], [vx - bw * 0.42, 420 - hh * 0.5], [vx - cw - 6, py + 8], [vx - cw, py],
+          [vx + cw, py], [vx + cw + 6, py + 8], [vx + bw * 0.4, 420 - hh * 0.52], [vx + bw, 424]];
+        t.poly(pts, '#12070c');
+        // Lichtflanke links (Mond/Glut), Rinnen
+        t.poly([[vx - bw * 0.42, 420 - hh * 0.5], [vx - cw - 6, py + 8], [vx - cw, py], [vx - cw + 10, py + 6],
+          [vx - bw * 0.2, 420 - hh * 0.35], [vx - bw * 0.6, 424], [vx - bw, 424]], '#1e0c0e');
+        for (var g = -2; g <= 2; g++) {
+          if (!g) continue;
+          t.linie(vx + g * cw * 0.5, py + 10, vx + g * bw * 0.35, 420, 2, '#0a0408');
+        }
+        // Krater
+        t.ell(vx, py, cw, 6, G[8]);
+        t.ell(vx, py - 2, cw - 8, 3, G[10]);
+        // Rinnsal
+        var lx = vx + 4, len = hh * 0.85;
+        for (var s = 0; s < len; s += 4) {
+          lx += Math.round((r() - 0.45) * 2) * 2;
+          var c = s < len * 0.35 ? G[8] : (s < len * 0.7 ? G[7] : G[6]);
+          t.R(lx, py + 4 + s, s < len * 0.5 ? 4 : 2, 4, c);
+          if (s < 40) t.R(lx + 1, py + 4 + s, 2, 4, G[10]);
+        }
       }
-      vulkan(60, 100, 55, 42, '#ff2a08');
-      vulkan(160, 102, 70, 55, '#ff4a18');
-      vulkan(280, 100, 48, 38, '#ff3a08');
-      // Aschehügel
-      x.fillStyle = pal.huegel2 || '#140808';
-      x.beginPath(); x.moveTo(0, 100); x.quadraticCurveTo(90, 78, 180, 98); x.quadraticCurveTo(260, 80, 360, 100); x.lineTo(360, 112); x.lineTo(0, 112); x.fill();
-      x.fillStyle = pal.huegel || '#1e0c0a';
-      x.beginPath(); x.moveTo(0, 104); x.quadraticCurveTo(120, 90, 220, 104); x.quadraticCurveTo(300, 88, 360, 104); x.lineTo(360, 114); x.lineTo(0, 114); x.fill();
+      vulkan(280, KRATER[0][1], 230, 18);
+      vulkan(780, KRATER[1][1], 320, 26);
+      vulkan(1300, KRATER[2][1], 210, 16);
+      // Lava-Meer am Horizont
+      t.R(0, 404, w, 30, G[3]);
+      t.R(0, 404, w, 2, G[6]);
+      for (i = 0; i < 220; i++) {
+        var sy = 406 + Math.round(r() * 12) * 2, sl = 8 + Math.round(r() * 16) * 2;
+        var q = r();
+        t.R(Math.round(r() * w / 2) * 2, sy, sl, 2, q < 0.6 ? G[5] : (q < 0.9 ? G[6] : G[7]));
+      }
+      for (i = 0; i < 12; i++) {   // Mondspiegelung
+        var rw = 60 - i * 4;
+        t.R(MOND.x + 20 - rw / 2 + (i % 2) * 6, 406 + i * 2, rw, 2, i < 4 ? G[8] : G[7]);
+      }
+      // Aschehügel, 2 Ketten
+      function huegel(yb, amp, ph, c) {
+        var pts = [[0, h]];
+        for (var hx = 0; hx <= w; hx += 40) pts.push([hx, yb - Math.abs(Math.sin(hx / 170 + ph)) * amp - Math.sin(hx / 57 + ph) * 4]);
+        pts.push([w, h]);
+        t.poly(pts, c);
+      }
+      huegel(436, 20, 0.4, '#1a0a0e');
+      huegel(452, 14, 2.1, '#120810');
+      t.R(0, 470, w, h - 470, '#0c0610');
+      // atmosphärische Tiefe: Richtung Himmelston entsättigen
+      t.toene(180, 440, 0.16, 0.08, G[5]);
     });
 
+    /* L2 Stadt (0.45): Häuserreihen, Arkaden, Kirchenruine mit Glocke, Ketten- und Knochen-Leinen */
     var L2 = backe(LW, H, function (x, w, h) {
-      function ruins(hx, hy, hw, hh) {
-        x.fillStyle = '#141018';
-        x.fillRect(hx, hy, hw, hh);
-        x.fillStyle = '#0a080c';
-        x.fillRect(hx + 2, hy + 4, hw - 4, 3);
-        // gebrochene Zinne
-        x.fillStyle = '#1a1018';
-        for (var z = 0; z < hw; z += 8) {
-          if ((z / 8) % 2 === 0) x.fillRect(hx + z, hy - 5, 5, 5);
+      var t = werkzeug(x), r = rng(300), i;
+      // hintere Reihe, durchgehend
+      var pts = [[0, 530]];
+      for (var hx = 0; hx <= w; hx += 48) {
+        var top = 380 + Math.round(r() * 20) * 2;
+        pts.push([hx, top]); pts.push([hx + 40, top]); pts.push([hx + 44, top + 8 + Math.round(r() * 6) * 2]);
+      }
+      pts.push([w, 530]);
+      t.poly(pts, '#120c12');
+      for (i = 0; i < 40; i++) t.R(Math.round(r() * w / 4) * 4, 400 + Math.round(r() * 30) * 2, 4, 6, r() < 0.5 ? G[4] : G[5]);
+
+      function fenster(fx, fy, fw, fh, an) {
+        t.R(fx - 2, fy - 2, fw + 4, fh + 4, '#08060a');
+        if (!an) { t.R(fx, fy, fw, fh, '#0e0a10'); return; }
+        t.R(fx, fy, fw, fh, G[7]);
+        t.R(fx, fy + fh - 4, fw, 4, G[8]);
+        t.R(fx + 2, fy + 2, 2, Math.max(2, fh - 8), G[9]);
+        t.R(fx + fw / 2 - 1, fy, 2, fh, '#08060a');      // Sprosse
+      }
+      function haus(hx0, top, hw, seed) {
+        var q = rng(seed);
+        t.kR(hx0, top, hw, 530 - top, '#1a1218');
+        t.R(hx0, top, 4, 530 - top, '#221820');            // Lichtkante
+        t.R(hx0, top + 10, hw, 4, '#100a10');
+        for (var z = 0; z < hw; z += 16) {                // Zinnen, z. T. abgebrochen
+          var zh = q() < 0.3 ? 4 : 12;
+          t.R(hx0 + z, top - zh, 10, zh, '#1a1218');
         }
-        // Glutfenster
-        x.fillStyle = '#ff4a18';
-        x.fillRect(hx + 5, hy + 12, 5, 7);
-        x.fillRect(hx + hw - 10, hy + 14, 5, 6);
-        x.fillStyle = '#ffb040';
-        x.fillRect(hx + 6, hy + 13, 2, 3);
+        for (var fy = top + 26; fy < 470; fy += 46) {
+          for (var fx = hx0 + 12; fx + 18 < hx0 + hw; fx += 30) fenster(fx, fy, 16, 24, q() < 0.55);
+        }
         // Risse
-        x.fillStyle = '#000';
-        x.fillRect(hx + hw / 2, hy + 6, 1, hh - 8);
-        x.fillRect(hx + 8, hy + hh - 16, 10, 1);
+        var rx = hx0 + hw * (0.3 + q() * 0.4), ry = top + 14;
+        for (var s = 0; s < 10; s++) { t.R(rx, ry, 2, 8, '#06040a'); rx += Math.round((q() - 0.5) * 3) * 2; ry += 8; }
       }
-      ruins(6, 82, 34, 40);
-      ruins(46, 88, 28, 34);
-      ruins(80, 78, 38, 44);
-      // dunkler Turm / Obelisk
-      x.fillStyle = '#0e0a10';
-      x.fillRect(128, 48, 20, 72);
-      x.fillStyle = '#1a0c10';
-      x.beginPath(); x.moveTo(125, 48); x.lineTo(138, 28); x.lineTo(151, 48); x.fill();
-      x.fillStyle = '#ff3a08';
-      x.fillRect(134, 58, 8, 14);
-      x.fillStyle = '#ffb040';
-      x.fillRect(136, 62, 4, 6);
-      // Arkade in Schatten
-      x.fillStyle = '#120c14';
-      x.fillRect(156, 90, 72, 30);
-      x.fillStyle = '#08060a';
-      for (var a = 0; a < 4; a++) {
-        x.fillRect(162 + a * 16, 100, 12, 20);
-        x.beginPath(); x.arc(168 + a * 16, 100, 6, Math.PI, 0); x.fill();
+      haus(40, 306, 96, 1);
+      haus(150, 336, 84, 2);
+      haus(246, 290, 110, 3);
+      // Arkaden-Gebäude
+      var ax0 = 380, ax1 = 720;
+      t.kR(ax0, 320, ax1 - ax0, 210, '#1c1418');
+      t.R(ax0, 320, ax1 - ax0, 6, '#2c1e22');
+      t.R(ax0, 404, ax1 - ax0, 8, '#2c1e22');              // Gesims
+      t.R(ax0, 412, ax1 - ax0, 2, '#08060a');
+      for (i = 0; i < 9; i++) fenster(ax0 + 16 + i * 36, 346, 18, 40, (i * 7 + 3) % 5 > 1);
+      for (i = 0; i < 6; i++) {                           // Arkadenbögen
+        var bx = ax0 + 14 + i * 54;
+        t.R(bx, 424, 12, 106, '#2a1e22');                 // Pfeiler
+        t.R(bx - 2, 420, 16, 6, '#34262a');               // Kapitell
+        var cx = bx + 12 + 21;
+        t.R(cx - 21, 446, 42, 84, '#08060a');
+        t.ell(cx, 446, 21, 22, '#08060a');
+        t.R(cx - 21, 446, 42, 2, '#08060a');
+        t.R(cx - 14, 470, 28, 30, i % 2 ? G[4] : G[3]);    // Glut tief im Gang
+        t.R(cx - 6, 488, 12, 12, i % 2 ? G[5] : G[4]);
       }
-      ruins(238, 84, 32, 38);
-      ruins(278, 78, 36, 44);
-      ruins(320, 90, 26, 32);
-      // Ketten / Knochen-Leine
-      x.fillStyle = '#3a2a20';
-      x.fillRect(52, 90, 50, 1);
-      x.fillStyle = '#4a3a30';
-      x.fillRect(60, 91, 4, 8);
-      x.fillRect(78, 90, 5, 9);
-      x.fillRect(94, 91, 3, 7);
-    });
-
-    var L3 = backe(LW, H, function (x, w, h) {
-      // Lava-Brunnen / Opferaltar
-      var bx = 170;
-      x.fillStyle = '#1a1010';
-      x.fillRect(bx - 20, 128, 40, 10);
-      x.fillStyle = '#2a1818';
-      x.fillRect(bx - 14, 118, 28, 10);
-      x.fillStyle = '#3a2020';
-      x.fillRect(bx - 8, 108, 16, 10);
-      // Lava oben
-      x.fillStyle = '#ff3a08';
-      x.fillRect(bx - 12, 124, 24, 4);
-      x.fillRect(bx - 6, 116, 12, 3);
-      x.fillStyle = '#ffb040';
-      x.fillRect(bx - 1, 102, 2, 10);
-      x.fillRect(bx - 3, 106, 1, 4);
-      x.fillRect(bx + 2, 108, 1, 3);
-      x.fillStyle = '#000';
-      x.fillRect(bx - 20, 137, 40, 2);
-
-      // Tote Palme / verkohlter Baum
-      function toterBaum(px, py) {
-        x.fillStyle = '#1a1008';
-        x.fillRect(px, py, 4, 38);
-        x.fillStyle = '#2a1810';
-        x.fillRect(px - 8, py + 4, 10, 2);
-        x.fillRect(px + 2, py + 10, 12, 2);
-        x.fillRect(px - 6, py + 18, 8, 2);
+      t.R(ax0 + 14 + 6 * 54, 424, 12, 106, '#2a1e22');
+      // Neon-Halter (Schrift selbst animiert)
+      t.kR(NEON.x - 96, 262, 192, 50, '#0e0a10');
+      t.R(NEON.x - 80, 312, 4, 8, '#2a1e22'); t.R(NEON.x + 76, 312, 4, 8, '#2a1e22');
+      // Kirche: Turm (Ruine) + Schiff mit Rosette
+      var tx = 830, tw = 90;
+      t.kpoly([[tx, 530], [tx, 176], [tx + 14, 162], [tx + 26, 172], [tx + 40, 150], [tx + 58, 168], [tx + 70, 158], [tx + tw, 180], [tx + tw, 530]], '#18121a');
+      t.R(tx, 180, 6, 350, '#221a24');
+      for (i = 0; i < 6; i++) t.R(tx, 260 + i * 44, tw, 2, '#100a12');
+      t.R(tx + 10, 200, 28, 56, '#060408');                // Schallöffnungen
+      t.ell(tx + 24, 200, 14, 12, '#060408');
+      t.R(tx + 52, 200, 28, 56, '#060408');
+      t.ell(tx + 66, 200, 14, 12, '#060408');
+      t.ell(GLOCKE.x, GLOCKE.y - 6, 10, 12, G[7]);         // Glocke glüht
+      t.R(GLOCKE.x - 12, GLOCKE.y, 24, 8, G[7]);
+      t.R(GLOCKE.x - 8, GLOCKE.y - 14, 4, 18, G[9]);
+      t.R(GLOCKE.x - 2, GLOCKE.y + 8, 4, 4, G[10]);
+      t.ell(tx + 45, 312, 20, 20, '#2a1e22');              // Uhr, zerbrochen
+      t.ell(tx + 45, 312, 16, 16, '#0a070c');
+      t.linie(tx + 45, 312, tx + 52, 300, 2, G[6]);
+      t.linie(tx + 45, 312, tx + 36, 318, 2, G[6]);
+      fenster(tx + 36, 360, 18, 44, true);
+      // Schiff mit Giebel (rechts abgebrochen)
+      var sx0 = 920, sx1 = 1190, gm = 1052;
+      t.kpoly([[sx0, 530], [sx0, 340], [gm, 266], [gm + 40, 290], [gm + 54, 280], [gm + 70, 306], [sx1 - 30, 330], [sx1, 352], [sx1, 530]], '#1a121a');
+      t.poly([[sx0, 340], [gm, 266], [gm, 278], [sx0 + 12, 346]], '#2c1e22');
+      t.R(sx0, 340, sx1 - sx0, 4, '#100a12');
+      var rx0 = gm, ry0 = 380;                            // Rosette
+      t.ell(rx0, ry0, 46, 46, '#000');
+      t.ell(rx0, ry0, 44, 44, '#2c1e22');
+      t.ell(rx0, ry0, 36, 36, G[7]);
+      t.ell(rx0, ry0, 28, 28, t.pat(G[8], 50));
+      for (i = 0; i < 8; i++) {
+        var a = i * Math.PI / 4;
+        t.linie(rx0, ry0, rx0 + Math.cos(a) * 36, ry0 + Math.sin(a) * 36, 4, '#140c12');
       }
-      toterBaum(300, 100);
-      toterBaum(332, 108);
-
-      // Feuer-Kiosk / Schrein
-      x.fillStyle = '#2a1008';
-      x.fillRect(248, 118, 28, 20);
-      x.fillStyle = '#ff3a08';
-      x.fillRect(250, 114, 24, 5);
-      x.fillStyle = '#ffb040';
-      x.fillRect(256, 122, 12, 10);
-      x.fillStyle = '#000';
-      x.fillRect(258, 124, 8, 6);
-
-      // Café-Ruine links mit Glut
-      x.fillStyle = '#1a0c08';
-      x.fillRect(8, 120, 36, 18);
-      x.fillStyle = '#ff4a18';
-      for (var f = 0; f < 5; f++) {
-        x.fillRect(12 + f * 6, 112 - (f % 3), 4, 8 + (f % 2));
-      }
-      x.fillStyle = '#ffb040';
-      x.fillRect(18, 110, 3, 6);
-      x.fillRect(30, 108, 2, 5);
-
-      // Dämonen-Silhouetten am Rand
-      x.fillStyle = 'rgba(0,0,0,0.65)';
-      x.fillRect(96, 118, 5, 14); x.fillRect(95, 114, 7, 5); // Hörner
-      x.fillRect(96, 112, 2, 3); x.fillRect(100, 112, 2, 3);
-      x.fillRect(214, 120, 5, 12); x.fillRect(213, 116, 7, 5);
-      x.fillRect(214, 114, 2, 3); x.fillRect(218, 114, 2, 3);
-    });
-
-    var L4 = backe(LW, H, function (x, w, h) {
-      var BODEN = 148;
-      var y = BODEN - 4;
-      for (var r = 0; y < h; r++) {
-        var th = 2 + Math.min(r, 6);
-        var tw = 12 + r * 3;
-        for (var tx = -((r * 5) % tw); tx < w; tx += tw) {
-          x.fillStyle = ((Math.floor(tx / tw) + r) & 1) ? '#1c1210' : '#120c0a';
-          x.fillRect(tx, y, tw - 1, th - 1);
-          x.fillStyle = '#0a0606';
-          x.fillRect(tx + tw - 1, y, 1, th);
+      t.ell(rx0, ry0, 8, 8, G[9]);
+      t.ell(rx0, ry0, 4, 4, G[10]);
+      t.R(gm - 30, 452, 60, 78, '#08060a');                // Portal
+      t.ell(gm, 452, 30, 28, '#08060a');
+      t.R(gm - 20, 474, 40, 56, G[3]);
+      t.R(gm - 2, 452, 4, 78, '#08060a');
+      fenster(sx0 + 30, 380, 20, 56, true); fenster(sx1 - 50, 390, 20, 50, false);
+      // rechte Häuser
+      haus(1200, 318, 96, 4);
+      haus(1308, 298, 120, 5);
+      // Ketten- und Knochen-Leinen
+      function leine(x0, y0, x1, y1, sag) {
+        var n = Math.round((x1 - x0) / 4);
+        for (var s = 0; s <= n; s++) {
+          var q = s / n, lx = x0 + (x1 - x0) * q, ly = y0 + (y1 - y0) * q + Math.sin(q * Math.PI) * sag;
+          t.R(Math.round(lx / 2) * 2, Math.round(ly / 2) * 2, s % 2 ? 4 : 2, 2, s % 2 ? '#3a2a20' : '#2a1e18');
+          if (s % 9 === 4 && s < n - 2) {
+            if (s % 18 === 4) {   // Schädel
+              t.R(lx - 4, ly + 6, 10, 8, '#4a3a30'); t.R(lx - 2, ly + 14, 6, 2, '#4a3a30');
+              t.R(lx - 2, ly + 8, 2, 2, '#0a0606'); t.R(lx + 2, ly + 8, 2, 2, '#0a0606');
+              t.R(lx, ly, 2, 6, '#2a1e18');
+            } else {             // Knochen
+              t.R(lx, ly + 2, 2, 12, '#4a3a30'); t.R(lx - 2, ly + 12, 6, 2, '#4a3a30');
+            }
+          }
         }
-        y += th;
       }
-      // Lava-Risse im Pflaster
-      x.fillStyle = '#ff3a08';
-      x.fillRect(40, BODEN + 6, 2, 18);
-      x.fillRect(42, BODEN + 10, 8, 1);
-      x.fillRect(250, BODEN + 8, 2, 16);
-      x.fillRect(240, BODEN + 14, 12, 1);
-      x.fillRect(100, BODEN + 20, 18, 1);
-      x.fillStyle = '#ffb040';
-      x.fillRect(40, BODEN + 8, 1, 10);
-      x.fillRect(251, BODEN + 10, 1, 8);
-      // dunkles Medaillon mit Glutring
-      var mx = 180, my = BODEN + 12;
-      x.fillStyle = '#8a2808';
-      x.beginPath(); x.ellipse(mx, my, 28, 8, 0, 0, Math.PI * 2); x.fill();
-      x.fillStyle = '#2a0c08';
-      x.beginPath(); x.ellipse(mx, my, 22, 6, 0, 0, Math.PI * 2); x.fill();
-      x.fillStyle = '#ff4a18';
-      x.beginPath(); x.ellipse(mx, my, 8, 2, 0, 0, Math.PI * 2); x.fill();
-      // Ascheflecken
-      x.fillStyle = 'rgba(0,0,0,0.45)';
-      x.fillRect(60, BODEN + 8, 10, 3);
-      x.fillRect(280, BODEN + 16, 14, 2);
+      leine(136, 330, 380, 334, 40);
+      leine(720, 330, 830, 290, 30);
+      leine(1190, 360, 1308, 316, 26);
+      leine(246, 310, 150, 340, 14);
+      // unten zum Kampfstreifen hin ruhig/dunkel
+      t.toene(430, 530, 0, 0.7);
     });
 
-    var L5 = backe(LW, H, function (x, w, h) {
-      // Schädel / Knochen links
-      x.fillStyle = '#3a2a20';
-      x.fillRect(4, 160, 10, 8);
-      x.fillStyle = '#1a1010';
-      x.fillRect(6, 162, 2, 2); x.fillRect(10, 162, 2, 2);
-      x.fillRect(8, 165, 3, 2);
-      // verkohlte Bank
-      x.fillStyle = '#1a1008';
-      x.fillRect(330, 150, 28, 4);
-      x.fillRect(332, 154, 3, 8);
-      x.fillRect(354, 154, 3, 8);
-      // Fackel-Laterne mit Flamme
-      x.fillStyle = '#1a1018';
-      x.fillRect(18, 128, 3, 42);
-      x.fillStyle = '#ff3a08';
-      x.fillRect(14, 118, 11, 12);
-      x.fillStyle = '#ffb040';
-      x.fillRect(17, 114, 5, 8);
-      x.fillStyle = '#ffe080';
-      x.fillRect(18, 112, 3, 4);
-      // rechte Fackel
-      x.fillStyle = '#1a1018';
-      x.fillRect(340, 132, 3, 38);
-      x.fillStyle = '#ff3a08';
-      x.fillRect(336, 122, 11, 12);
-      x.fillStyle = '#ffb040';
-      x.fillRect(339, 118, 5, 8);
+    /* L3 Plaza (0.70): Balustrade, Lava-Brunnen, Café-Ruine, tote Palmen, Feuer-Kiosk */
+    var L3 = backe(LW, H, function (x, w, h) {
+      var t = werkzeug(x), r = rng(400), i;
+      // ferner Platzboden
+      t.R(0, 520, w, 80, '#100a0e');
+      for (i = 0; i < 6; i++) t.R(0, 526 + i * 12 + i * i, w, 2, '#0a060a');
+      // Balustrade (Publikum steht dahinter)
+      t.R(0, 512, w, 6, '#1e1418');
+      t.R(0, 510, w, 2, '#000');
+      for (var bx = 0; bx < w; bx += 16) { t.R(bx + 4, 518, 8, 22, '#18101a'); t.R(bx + 6, 524, 4, 8, '#120a12'); }
+      t.R(0, 540, w, 6, '#1a1016');
+
+      // Café-Ruine links
+      t.kR(40, 352, 320, 248, '#1a1016');
+      t.R(40, 352, 320, 6, '#2a1c20');
+      t.R(56, 372, 150, 26, '#0c080c');                    // Schild
+      x.font = 'bold 22px ' + SCHRIFT; x.textAlign = 'center';
+      x.fillStyle = G[7]; x.fillText('CAFÉ', 131, 393);
+      x.fillStyle = '#4a3a30'; x.fillText('del infierno', 288, 392);
+      for (i = 0; i < 3; i++) {                            // Fenster/Tür
+        t.R(64 + i * 96, 460, 64, 140, '#08060a');
+        t.R(70 + i * 96, 470, 52, 40, i === 1 ? G[5] : G[4]);
+        t.R(70 + i * 96, 498, 52, 12, i === 1 ? G[6] : G[5]);
+      }
+      // Markise in Fetzen (cafeSchirm A/B)
+      var sA = pal.cafeSchirmA || '#5a1008', sB = pal.cafeSchirmB || '#2a0808';
+      t.R(36, 404, 328, 6, '#2a1e22');
+      for (var m = 0; m < 14; m++) {
+        if (m === 4 || m === 10) continue;                 // fehlende Bahnen
+        var len = 22 + Math.round(r() * 14) * 2;
+        var mx = 38 + m * 23;
+        t.R(mx, 410, 22, len, m % 2 ? sB : sA);
+        t.R(mx, 410, 22, 4, '#000');
+        for (var f = 0; f < 22; f += 6) t.R(mx + f, 410 + len, 4, 2 + Math.round(r() * 5) * 2, m % 2 ? sB : sA);
+        if (m % 3 === 0) t.R(mx + 8, 410 + len - 6, 6, 6, G[6]);   // Glutrand
+      }
+      t.linie(38 + 4 * 23, 410, 38 + 4 * 23 + 10, 456, 2, sA);     // hängender Fetzen
+      // Bistro-Tische, umgekippte Stühle (sehr dunkel)
+      function tisch(tx0) {
+        t.ell(tx0, 552, 22, 4, '#0c080c'); t.R(tx0 - 2, 554, 4, 30, '#0c080c'); t.R(tx0 - 12, 582, 24, 4, '#0c080c');
+      }
+      tisch(110); tisch(270);
+      t.linie(150, 590, 176, 566, 4, '#0c080c'); t.linie(160, 590, 150, 572, 4, '#0c080c');
+
+      // Lava-Brunnen (Blickfang, links der Mitte)
+      var B = BRUNNEN.x;
+      t.ell(B, 434, 90, 30, t.pat(G[5], 25));             // Glow-Halo
+      t.kR(B - 130, 528, 260, 62, '#1a1214');              // Becken-Front
+      for (var ry = 528; ry < 590; ry += 14) {
+        t.R(B - 130, ry, 260, 2, '#0e0a0c');
+        for (var rx = B - 130 + ((ry / 14) % 2) * 14; rx < B + 130; rx += 28) t.R(rx, ry, 2, 14, '#0e0a0c');
+        t.R(B - 130, ry + 2, 260, 2, '#221a1e');
+      }
+      t.ell(B, 528, 136, 16, '#000');
+      t.ell(B, 528, 134, 14, '#2a1e22');
+      t.ell(B, 528, 122, 9, G[4]);
+      for (i = 0; i < 16; i++) t.R(B - 110 + Math.round(r() * 110) * 2, 522 + Math.round(r() * 5) * 2, 6 + Math.round(r() * 6) * 2, 2, G[5]);
+      t.kR(B - 12, 444, 24, 84, '#221820');                // Säule
+      for (i = 0; i < 4; i++) t.R(B - 14, 458 + i * 18, 28, 4, '#2c2026');
+      t.kpoly([[B - 60, BRUNNEN.schale], [B + 60, BRUNNEN.schale], [B + 30, 450], [B - 30, 450]], '#261c22');
+      t.ell(B, BRUNNEN.schale, 62, 10, '#2c2026');
+      t.ell(B, BRUNNEN.schale, 52, 6, G[8]);
+      t.ell(B, BRUNNEN.schale - 2, 34, 3, G[10]);
+      t.R(B - 56, 438, 2, 86, G[7]); t.R(B + 54, 438, 2, 86, G[7]);   // Überlauf
+      t.R(B - 54, 438, 2, 20, G[9]); t.R(B + 52, 438, 2, 20, G[9]);
+      t.R(B - 6, 392, 12, 40, '#221820');                  // obere Schale
+      t.ell(B, 390, 28, 6, '#2c2026');
+      t.ell(B, 389, 22, 3, G[8]);
+      // Dämonenkopf-Speier
+      t.kR(B - 10, 366, 20, 18, '#2a1e22');
+      t.R(B - 14, 360, 4, 8, '#2a1e22'); t.R(B + 10, 360, 4, 8, '#2a1e22');
+      t.R(B - 6, 372, 4, 2, G[9]); t.R(B + 2, 372, 4, 2, G[9]);
+      t.R(B - 4, 378, 8, 4, G[8]);
+
+      // tote Palmen
+      function palme(px, py, lean, seed) {
+        var q = rng(seed), top = 318, n = Math.round((py - top) / 10), cx = px, cy = py;
+        for (var s = 0; s < n; s++) {
+          var k = s / n;
+          cx = px + lean * k * k * 60; cy = py - s * 10;
+          t.R(cx - 8, cy - 10, 16, 10, '#000');
+          t.R(cx - 6, cy - 10, 12, 10, s % 3 === 2 ? '#120a08' : '#2a1810');
+          t.R(cx - 6, cy - 2, 12, 2, '#1a0e08');
+          t.R(cx - 6, cy - 10, 2, 8, '#3a2216');
+        }
+        var kx = cx, ky = cy - 10;
+        t.ell(kx, ky, 10, 8, '#1a0e08');
+        for (var fr = 0; fr < 7; fr++) {                   // hängende Wedel
+          var a = -Math.PI + fr * Math.PI / 6 + (q() - 0.5) * 0.3;
+          var lenF = 60 + q() * 40, ex = kx, ey = ky;
+          for (var s2 = 0; s2 < lenF; s2 += 4) {
+            var p = s2 / lenF;
+            ex = kx + Math.cos(a) * s2;
+            ey = ky + Math.sin(a) * s2 * 0.6 + p * p * 70;
+            var d = p < 0.5 ? 6 : (p < 0.8 ? 4 : 2);
+            t.R(ex, ey, d, d, '#1a1008');
+            if (s2 % 8 === 0 && p > 0.2) t.R(ex, ey + d, 2, 6 + Math.round(q() * 4) * 2, '#140c06');
+          }
+          t.R(ex, ey, 2, 2, q() < 0.6 ? G[7] : G[6]);       // Glut-Spitze
+        }
+      }
+      palme(880, 600, 0.6, 7);
+      palme(1330, 600, -0.5, 9);
+
+      // Feuer-Kiosk
+      var kx0 = 1060, kx1 = 1180;
+      t.kR(kx0, 470, kx1 - kx0, 130, '#1c1012');
+      t.R(kx0 + 10, 488, kx1 - kx0 - 20, 30, G[4]);
+      t.R(kx0 + 10, 510, kx1 - kx0 - 20, 8, G[5]);
+      t.R(kx0, 518, kx1 - kx0, 6, '#2a1c20');
+      t.kpoly([[kx0 - 14, 472], [kx1 + 14, 472], [kx1 - 4, 446], [kx0 + 4, 446]], pal.dach || '#3a1010');
+      for (i = 0; i < 6; i++) t.R(kx0 - 8 + i * 22, 466, 12, 6, pal.dach2 || '#2a0c0c');
+      t.kR(KIOSK.x - 18, KIOSK.y, 36, 14, '#2a1e22');       // Feuerbecken
+      t.R(KIOSK.x - 14, KIOSK.y, 28, 4, G[8]);
+      x.font = 'bold 14px ' + SCHRIFT; x.fillStyle = G[6]; x.fillText('FUEGO', 1120, 506);
+
+      // zum Kampfstreifen hin ruhig/dunkel
+      t.toene(470, 600, 0.05, 0.62);
     });
 
-    // v1.4: Native-Layer später (v1.6); jetzt nearest-neighbor ×4 → 1440×768
-    function up(src) {
-      if (!src) return null;
-      var nw = src.width * 4, nh = Math.round(src.height * SY);
-      return backe(nw, nh, function (x) {
-        if ('imageSmoothingEnabled' in x) x.imageSmoothingEnabled = false;
-        x.drawImage(src, 0, 0, nw, nh);
+    /* L4 Boden (1.0): Pflaster mit Perspektive, 3-Ton-Fugen, Medaillon, Asche; Risse separat */
+    var VX = 720, VY = 260, ROWS = [6, 8, 10, 8, 8, 14, 16, 18, 20, 22, 24, 26, 30];
+    var RISSE = (function () {
+      var q = rng(4040), out = [], starts = [[150, 652], [360, 690], [520, 648], [960, 660], [1120, 700], [1290, 650], [860, 740]];
+      for (var c = 0; c < starts.length; c++) {
+        var cx = starts[c][0], cy = starts[c][1], dir = q() < 0.5 ? -1 : 1;
+        for (var s = 0; s < 14; s++) {
+          var dx = dir * (6 + Math.round(q() * 6) * 2), dy = Math.round(q() * 4) * 2 - 2;
+          if (cy + dy < 648 || cy + dy > 760) dy = -dy;
+          out.push([Math.min(cx, cx + dx), cy, Math.abs(dx) + 4, 4, 1]);
+          out.push([cx + dx, Math.min(cy, cy + dy), 4, Math.abs(dy) + 4, 1]);
+          if (q() < 0.2) out.push([cx + dx, cy + 4, 2, 10 + Math.round(q() * 6) * 2, 0]);  // Ast
+          cx += dx; cy += dy;
+          if (q() < 0.15) dir = -dir;
+        }
+      }
+      return out;
+    })();
+    var L4 = backe(LW, H, function (x, w, h) {
+      var t = werkzeug(x), r = rng(500), i;
+      var STEIN = ['#1c1210', '#170f0d', '#221612'];
+      t.R(0, 600, w, h - 600, '#0a0606');
+      var y = 600;
+      for (var ri = 0; ri < ROWS.length && y < h; ri++) {
+        var rh = ROWS[ri], sc = (y + rh / 2 - VY) / (768 - VY), u = 44;
+        var kmin = Math.floor((-VX / sc) / u) - 2, kmax = Math.ceil(((w - VX) / sc) / u) + 2;
+        for (var k = kmin; k < kmax; k++) {
+          var off = (ri % 2) * 0.5;
+          var xa = Math.round((VX + (k + off) * u * sc) / 2) * 2, xb = Math.round((VX + (k + 1 + off) * u * sc) / 2) * 2;
+          var c = STEIN[Math.floor(r() * 3)];
+          t.R(xa, y + 2, xb - xa, rh - 2, c);
+          if (rh >= 8) t.R(xa, y + 2, xb - xa - 2, 2, ri === 5 ? '#3a2018' : '#2a1a14');   // Licht-Oberkante
+          if (rh >= 10) t.R(xa, y + rh - 2, xb - xa, 2, '#120a08');                         // Schattenkante
+          t.R(xb - 4, y + 2, 2, rh - 2, '#140c0a');                                           // Fuge, Mittelton
+          t.R(xb - 2, y, 2, rh, '#0a0606');                                                   // Fuge, dunkel
+          if (rh >= 14 && r() < 0.18) t.R(xa + 6 + Math.round(r() * 4) * 2, y + 6, 6, 2, '#0e0806');  // Abplatzer
+        }
+        y += rh;
+      }
+      // Medaillon (perspektivisch flach)
+      var mx = 720, my = 704;
+      t.ell(mx, my, 152, 46, '#0a0606');
+      t.ell(mx, my, 146, 42, G[6]);
+      t.ell(mx, my, 136, 38, '#1a0c0a');
+      t.ell(mx, my, 128, 34, '#221210');
+      for (i = 0; i < 8; i++) {
+        var a = i * Math.PI / 4 + Math.PI / 8;
+        t.poly([[mx, my], [mx + Math.cos(a - 0.2) * 34, my + Math.sin(a - 0.2) * 10],
+          [mx + Math.cos(a) * 122, my + Math.sin(a) * 32], [mx + Math.cos(a + 0.2) * 34, my + Math.sin(a + 0.2) * 10]], i % 2 ? G[4] : G[5]);
+      }
+      t.ell(mx, my, 26, 8, '#0a0606');
+      t.ell(mx, my, 22, 7, G[7]);
+      t.ell(mx, my, 12, 4, G[8]);
+      // Glut-Halo um Risse (statisch), Ascheflecken
+      for (i = 0; i < RISSE.length; i += 3) t.ell(RISSE[i][0] + 4, RISSE[i][1] + 2, 14, 6, t.pat(G[3], 50));
+      for (i = 0; i < 16; i++) {
+        t.ell(40 + Math.round(r() * 680) * 2, 652 + Math.round(r() * 50) * 2, 20 + r() * 30, 4 + r() * 6, t.pat('#050208', 50));
+      }
+      // ferne Reihen (600–640) dunkler, Pflasterkante bei BODEN bleibt hell
+      t.toene(600, 640, 0.6, 0.2);
+    });
+    // Risse in 3 Rottönen (Rotation alle 16 Ticks), nur y 600–768
+    function risse(c, kern) {
+      return backe(LW, 168, function (x) {
+        x.translate(0, -600);
+        for (var i = 0; i < RISSE.length; i++) {
+          var s = RISSE[i];
+          x.fillStyle = c; x.fillRect(s[0], s[1], s[2], s[3]);
+          if (s[4] && s[2] > 6) { x.fillStyle = kern; x.fillRect(s[0] + 2, s[1] + 1, s[2] - 4, 2); }
+        }
       });
     }
-    return { L0: up(L0), L1: up(L1), L2: up(L2), L3: up(L3), L4: up(L4), L5: up(L5), lw: LW * 4 };
+    var L4r = [risse(G[7], G[8]), risse(G[8], G[9]), risse(G[6], G[7])];
+
+    /* L5 Vorder (1.15): Schädel, verkohlte Bank; Fackeln separat (L5f, Transparenz pro Seite) */
+    var L5 = backe(LW, H, function (x, w, h) {
+      var t = werkzeug(x);
+      var K = pal.knochen || '#4a3a30';
+      function schaedel(sx, sy, s) {
+        t.kR(sx, sy, 22 * s, 18 * s, K);
+        t.R(sx + 4 * s, sy + 18 * s, 14 * s, 6 * s, K);
+        t.R(sx + 2 * s, sy + 2 * s, 8 * s, 4 * s, '#6a5848');
+        t.R(sx + 4 * s, sy + 8 * s, 6 * s, 6 * s, '#0a0606'); t.R(sx + 12 * s, sy + 8 * s, 6 * s, 6 * s, '#0a0606');
+        t.R(sx + 6 * s, sy + 10 * s, 2, 2, G[7]); t.R(sx + 14 * s, sy + 10 * s, 2, 2, G[7]);
+        t.R(sx + 10 * s, sy + 16 * s, 2 * s, 2 * s, '#0a0606');
+        for (var z = 0; z < 4; z++) t.R(sx + (5 + z * 3) * s, sy + 20 * s, 2, 4 * s, '#1a1010');
+      }
+      t.kR(80, 752, 120, 8, '#3a2a20');                   // Knochenhaufen
+      t.linie(84, 748, 150, 760, 4, K); t.linie(120, 744, 196, 756, 4, '#3a2a20');
+      schaedel(96, 712, 2);
+      schaedel(150, 736, 1);
+      schaedel(60, 744, 1);
+      // verkohlte Bank
+      t.kR(1220, 694, 150, 10, '#1a1008');
+      t.kR(1220, 708, 150, 10, '#160c06');
+      t.R(1240, 698, 40, 2, G[6]); t.R(1310, 712, 30, 2, G[5]);
+      t.kR(1230, 718, 10, 46, '#120a06'); t.kR(1350, 718, 10, 46, '#120a06');
+      t.kR(1226, 664, 150, 8, '#1a1008');                 // Lehne, schief
+      t.R(1300, 664, 20, 8, '#000');
+    });
+    var L5f = backe(LW, H, function (x) {
+      var t = werkzeug(x);
+      for (var i = 0; i < FACKELN.length; i++) {
+        var fx = FACKELN[i];
+        t.kR(fx - 4, 590, 8, 178, '#1a1018');
+        t.R(fx - 4, 590, 2, 178, '#2a2028');
+        for (var b = 0; b < 4; b++) t.R(fx - 6, 620 + b * 36, 12, 4, '#2a1e22');
+        t.kpoly([[fx - 16, 568], [fx + 16, 568], [fx + 8, 590], [fx - 8, 590]], '#2a1e22');
+        t.R(fx - 12, 568, 24, 4, G[7]);
+        t.R(fx - 6, 568, 12, 2, G[9]);
+      }
+    });
+    // Publikum-Sprites: Dämonen-Silhouetten, Rim-Light von hinten
+    function daemon(armHoch) {
+      return backe(40, 60, function (x) {
+        var t = werkzeug(x), S = '#050208', L = G[3];
+        t.R(4, 0, 4, 4, S); t.R(6, 2, 4, 6, S); t.R(8, 6, 4, 6, S);
+        t.R(32, 0, 4, 4, S); t.R(30, 2, 4, 6, S); t.R(28, 6, 4, 6, S);
+        t.R(13, 6, 14, 2, S); t.R(11, 8, 18, 16, S);
+        t.R(8, 24, 24, 6, S); t.R(2, 28, 36, 32, S);
+        if (armHoch) { t.R(0, 8, 6, 22, S); t.R(0, 4, 4, 6, S); }
+        t.R(13, 6, 14, 2, L); t.R(2, 28, 6, 2, L); t.R(32, 28, 6, 2, L); t.R(4, 0, 2, 2, L); t.R(34, 0, 2, 2, L);
+        t.R(15, 14, 4, 2, G[9]); t.R(21, 14, 4, 2, G[9]);
+      });
+    }
+    var kegel = backe(240, 220, function (x) {
+      var t = werkzeug(x);
+      x.globalAlpha = 0.25; t.poly([[110, 0], [130, 0], [240, 220], [0, 220]], '#ff7a28');
+      x.globalAlpha = 0.45; t.poly([[114, 0], [126, 0], [190, 220], [50, 220]], '#ff7a28');
+      x.globalAlpha = 0.8; t.ell(120, 10, 40, 24, '#ff9a38');
+    });
+
+    return { L0: L0, L1: L1, L2: L2, L3: L3, L4: L4, L5: L5, lw: LW,
+      L4r: L4r, L5f: L5f, daemon: [daemon(false), daemon(true)], kegel: kegel };
   }
+
+  function ofs(par) { return Math.round(-camX * par) - 80; }
 
   function drawLayer(ctx, layer, par, tick) {
     if (!layer) return;
-    var ox = Math.round(-camX * par) - 80;
-    // leichte Ambient-Animation: Brunnen-Glitzer auf L3 per Overlay
-    ctx.drawImage(layer, ox, 0);
+    ctx.drawImage(layer, ofs(par), 0);
+  }
+
+  // Publikum hüpft 20 Frames bei schweren Treffern (rein clientseitig aus dem Snapshot)
+  function publikumHit(snap) {
+    var neu = [snap.p[0].hitSeq | 0, snap.p[1].hitSeq | 0];
+    if (hitSeqAlt) {
+      for (var i = 0; i < 2; i++) {
+        if (neu[i] !== hitSeqAlt[i] && (snap.p[i].hitKind === 'heavy' || snap.p[i].hitKind === 'throw')) hopT = 20;
+      }
+    }
+    hitSeqAlt = neu;
   }
 
   function arena(ctx, tick, snap) {
     if (!layers) layers = backeLayers();
-    // Kamera aus Spielermitte
+    var G = P().glut || GLUT_DEF, o, i, f;
+    arenaSnap = snap || null;
+    // Kamera: Spielermitte, Clamp ±CAM_MAX, Lerp 0.12 (ohne Snap: camX vom Aufrufer, z. B. Menü)
     if (snap && snap.p && snap.p.length === 2) {
-      var mid = (snap.p[0].x + snap.p[1].x) / 2;
-      var target = mid - W / 2;
-      camX = Math.max(-48, Math.min(48, target * 0.15));
-    } else camX = 0;
+      var target = ((snap.p[0].x + snap.p[1].x) / 2 - W / 2) * 0.15;
+      target = Math.max(-CAM_MAX, Math.min(CAM_MAX, target));
+      camX += (target - camX) * 0.12;
+      publikumHit(snap);
+    }
+    if (hopT > 0) hopT--;
 
-    drawLayer(ctx, layers.L0, 0, tick);
-    // Blutmond-Puls + Asche
+    // L0 + Blutmond-Puls
+    drawLayer(ctx, layers.L0, PAR.L0, tick);
     if ((tick % 90) < 10) {
-      ctx.fillStyle = 'rgba(255,60,20,0.18)';
-      ctx.beginPath(); ctx.arc(1080, Math.round(36*SY), 120, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,60,20,0.14)';
+      ctx.beginPath(); ctx.arc(MOND.x + ofs(PAR.L0), MOND.y, MOND.r + 24, 0, Math.PI * 2); ctx.fill();
     }
-    drawLayer(ctx, layers.L1, 0.1, tick);
-    // Vulkan-Glut-Flicker auf Bergspitzen
+    // L1 + Krater-Flackern
+    drawLayer(ctx, layers.L1, PAR.L1, tick);
+    o = ofs(PAR.L1);
     var vf = ((tick / 6) | 0) % 4;
-    ctx.fillStyle = vf < 2 ? '#ff3a08' : '#ffb040';
-    var ox1 = Math.round(-camX * 0.1) - 20;
-    ctx.fillRect(ox1 + 216, Math.round(54*SY) - vf*4, 32, 12 + vf*4);
-    ctx.fillRect(ox1 + 616, Math.round(42*SY) - vf*4, 40, 16 + vf*4);
-    ctx.fillRect(ox1 + 1096, Math.round(58*SY) - (vf % 2)*4, 28, 12);
-    // Funken aus Kratern
-    ctx.fillStyle = '#ffb040';
-    ctx.fillRect(ox1 + 632 + (vf % 3)*4, Math.round(38*SY) - vf * 8, 4, 8);
-    ctx.fillRect(ox1 + 240 + vf*4, Math.round(50*SY) - vf*4, 4, 8);
-    drawLayer(ctx, layers.L2, 0.25, tick);
-    // Neon-Schild „PLAZA“ am Turm
-    var ns = Math.round(-camX * 0.25);
+    for (i = 0; i < KRATER.length; i++) {
+      var kx = KRATER[i][0] + o, ky = KRATER[i][1], v = (vf + i) % 4;
+      ctx.fillStyle = v < 2 ? G[9] : G[10];
+      ctx.fillRect(kx - 8, ky - 6 - v * 2, 16, 4 + v * 2);
+      ctx.fillStyle = G[10];
+      ctx.fillRect(kx - 4 + ((v * 3) % 7), ky - 14 - v * 6, 2, 4);
+    }
+    // L2 + Glocke + Neon „PLAZA“
+    drawLayer(ctx, layers.L2, PAR.L2, tick);
+    o = ofs(PAR.L2);
+    ctx.globalAlpha = 0.18 + 0.12 * Math.sin(tick / 11);
+    ctx.fillStyle = G[9];
+    ctx.fillRect(GLOCKE.x + o - 16, GLOCKE.y - 20, 32, 34);
+    ctx.globalAlpha = 1;
     var glow = (tick % 40) < 28;
-    ctx.fillStyle = glow ? '#ff3a08' : '#801808';
-    ctx.font = 'bold 36px ' + SCHRIFT;
-    ctx.textAlign = 'center';
-    ctx.fillText('PLAZA', 640 + ns, Math.round(78*SY));
     if (glow) {
-      ctx.fillStyle = 'rgba(255,58,8,0.25)';
-      ctx.fillRect(560 + ns, Math.round(70*SY), 160, 40);
+      ctx.fillStyle = 'rgba(255,58,8,0.22)';
+      ctx.fillRect(NEON.x + o - 92, 266, 184, 42);
     }
-    drawLayer(ctx, layers.L3, 0.5, tick);
-    // Lava-Brunnen + Fackel-Flammen (animiert)
-    var f = ((tick / 5) | 0) % 4;
-    var bx = 600 - Math.round(camX * 0.5);
-    ctx.fillStyle = f % 2 ? '#ff3a08' : '#ff6020';
-    ctx.fillRect(bx, Math.round(104*SY) - f*4, 8, 24 + f*4);
-    ctx.fillRect(bx + 16, Math.round(108*SY) - (f % 3)*4, 4, 16);
-    ctx.fillStyle = '#ffb040';
-    ctx.fillRect(bx + 4, Math.round(102*SY) - f*4, 4, 12);
-    // Fackeln vorne (L5-Nähe, vor Pflaster noch als Ambient)
-    var fox = Math.round(-camX * 0.5) - 20;
-    ctx.fillStyle = f < 2 ? '#ffb040' : '#ffe080';
-    ctx.fillRect(fox + 68, Math.round(112*SY) - f*4, 12, 16 + f*4);
-    ctx.fillRect(fox + 1356, Math.round(116*SY) - (f % 3)*4, 12, 16);
-    // Embers steigen
-    ctx.fillStyle = '#ff6020';
-    for (var ei = 0; ei < 10; ei++) {
-      var ey = Math.round(140*SY) - ((tick + ei * 17) % 240);
-      var ex = 160 + ei * 220 + ((tick / 3 + ei * 9) % 28) - Math.round(camX);
-      if (ey > Math.round(70*SY)) ctx.fillRect(ex, ey, 3, 3);
+    ctx.fillStyle = glow ? '#ff3a08' : '#801808';
+    ctx.font = 'bold 40px ' + SCHRIFT;
+    ctx.textAlign = 'center';
+    ctx.fillText('PLAZA', NEON.x + o, NEON.y);
+    // Publikum (hinter der Balustrade von L3)
+    o = ofs(PAR.L3);
+    for (i = 0; i < PUBLIKUM.length; i++) {
+      var pu = PUBLIKUM[i], dy = ((tick / 20 + i * 1.7) | 0) % 2 * 2;
+      if (hopT > 0) dy += Math.round(Math.abs(Math.sin((20 - hopT) * 0.45 + i * 0.9)) * 14);
+      ctx.drawImage(layers.daemon[hopT > 0 ? 1 - pu[2] : pu[2]], pu[0] + o - 20, pu[1] - dy);
     }
-    // Asche-Partikel (fallen langsam, horizontal drift)
-    ctx.fillStyle = '#5a4038';
-    for (var ai = 0; ai < 24; ai++) {
-      var ay = ((tick * 0.4 + ai * 23) % 640);
-      var ax = (ai * 116 + ((tick / 8) | 0) * ((ai % 3) - 1) * 4 - Math.round(camX) + 1600) % 1440 - 80;
-      if ((ai + tick) % 3 === 0) ctx.fillStyle = '#3a2820';
-      else ctx.fillStyle = '#6a4840';
-      ctx.fillRect(ax, ay, 3, 3);
+    // L3 + Brunnen (Tropfen auf Parabeln, Glitzer, Strahl) + Kiosk-Feuer
+    drawLayer(ctx, layers.L3, PAR.L3, tick);
+    var bx = BRUNNEN.x + o;
+    f = ((tick / 5) | 0) % 4;
+    ctx.fillStyle = f % 2 ? G[9] : '#ff6020';
+    ctx.fillRect(bx - 2, BRUNNEN.top - 10 - f * 2, 4, 10 + f * 2);
+    ctx.fillStyle = G[10];
+    ctx.fillRect(bx - 1, BRUNNEN.top - 4, 2, 4);
+    for (i = 0; i < 8; i++) {
+      var ft = (tick + i * 3) % 24, vx = (i % 2 ? 1 : -1) * (0.8 + (i % 4) * 0.45);
+      var dx = bx + vx * ft, dyy = BRUNNEN.top - 6 - 4 * ft + 0.3 * ft * ft;
+      ctx.fillStyle = G[8];
+      ctx.fillRect(Math.round(dx - vx * 2), Math.round(dyy + 3), 2, 2);
+      ctx.fillStyle = ft < 16 ? G[10] : G[9];
+      ctx.fillRect(Math.round(dx), Math.round(dyy), 4, 4);
     }
-    // Lava-Glow auf Boden-Medaillon (vor L4 als Overlay nach L4)
-    drawLayer(ctx, layers.L4, 1.0, tick);
-    var pulse = 0.12 + 0.1 * Math.sin(tick / 14);
+    ctx.fillStyle = G[11];
+    var gs = (tick >> 2);
+    for (i = 0; i < 6; i++) {
+      var gh = (gs * 7 + i * 13) % 17;
+      ctx.fillRect(bx - 40 + ((gh * 5 + i * 11) % 80), BRUNNEN.schale - 2 + (i % 3) * 2, 2, 2);
+    }
+    ctx.fillStyle = G[9];
+    var sd = (tick % 30) * 3;                         // Tropfen im Überlauf
+    ctx.fillRect(bx - 56, 440 + sd, 2, 6);
+    ctx.fillRect(bx + 54, 440 + ((sd + 40) % 90), 2, 6);
+    var kf = ((tick / 4) | 0) % 3, kxx = KIOSK.x + o;
+    ctx.fillStyle = G[8]; ctx.fillRect(kxx - 12, KIOSK.y - 12 - kf * 2, 24, 12 + kf * 2);
+    ctx.fillStyle = G[10]; ctx.fillRect(kxx - 6 + kf * 2, KIOSK.y - 22 + kf * 2, 8, 20 - kf * 2);
+    ctx.fillStyle = G[11]; ctx.fillRect(kxx - 2, KIOSK.y - 10, 4, 8);
+    // L4 + pulsierende Risse + Medaillon-Glut
+    drawLayer(ctx, layers.L4, PAR.L4, tick);
+    o = ofs(PAR.L4);
+    var rl = layers.L4r && layers.L4r[((tick / 16) | 0) % 3];
+    if (rl) ctx.drawImage(rl, o, 600);
+    var pulse = 0.10 + 0.08 * Math.sin(tick / 14);
     ctx.fillStyle = 'rgba(255,58,8,' + pulse.toFixed(3) + ')';
-    var mx = 640 - Math.round(camX);
-    ctx.beginPath();
-    ctx.arc(mx, 640, 72 + ((tick / 20) | 0) % 12, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255,176,64,' + (pulse * 0.6).toFixed(3) + ')';
-    ctx.beginPath();
-    ctx.arc(mx, 640, 32, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.ellipse(720 + o, 704, 150, 44, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,176,64,' + (pulse * 0.8).toFixed(3) + ')';
+    ctx.beginPath(); ctx.ellipse(720 + o, 704, 30, 9, 0, 0, Math.PI * 2); ctx.fill();
+    // Funkenregen: 24 Partikel, rein aus tick berechnet (keine Allokation)
+    for (i = 0; i < 24; i++) {
+      var life = 220 + (i * 37) % 120, ph = (tick + i * 53) % life;
+      var ey = 768 - ph * (1.6 + (i % 5) * 0.3);
+      if (ey < 120) continue;
+      var ex = ((i * 197 + 61) % LW) + Math.sin((tick + i * 20) / 18) * 10 + ofs(PAR.L4);
+      ctx.fillStyle = (ey > 480 && ey < 640) ? G[6] : (ph < life * 0.4 ? G[10] : G[8]);
+      ctx.fillRect(Math.round(ex), Math.round(ey), 2, 2);
+    }
   }
 
   function fg(ctx, tick) {
     if (!layers) return;
-    drawLayer(ctx, layers.L5, 1.15, tick);
+    drawLayer(ctx, layers.L5, PAR.L5, tick);
+    var o = ofs(PAR.L5), f = ((tick / 5) | 0) % 3;
+    var ps = arenaSnap && arenaSnap.p;
+    for (var i = 0; i < FACKELN.length; i++) {
+      var fx = FACKELN[i] + o, a = 1;
+      // halbtransparent, wenn ein Spieler dahinter steht
+      for (var j = 0; ps && j < ps.length; j++) if (Math.abs(ps[j].x - fx) < 56) a = 0.4;
+      ctx.globalAlpha = a;
+      if (layers.L5f) ctx.drawImage(layers.L5f, FACKELN[i] - 40, 520, 80, 248, fx - 40, 520, 80, 248);
+      var fr = FLAMME[(f + i) % 3];
+      for (var k = 0; k < 3; k++) {
+        ctx.fillStyle = fr[k][4];
+        ctx.fillRect(fx + fr[k][0], 568 + fr[k][1], fr[k][2], fr[k][3]);
+      }
+      ctx.globalAlpha = (0.13 + 0.03 * ((tick + i * 7) % 3)) * a;
+      if (layers.kegel) ctx.drawImage(layers.kegel, fx - 120, 548);
+      ctx.globalAlpha = 1;
+    }
   }
-
 
   /* ---- Figuren (v1.4 detailliert, 4×) ---- */
   function schatten(ctx, x, yBoden, w, hoch) {
