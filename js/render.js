@@ -1,4 +1,4 @@
-/* Pixel-Canvas v3.2: Level-System (Hölle/Dschungel/Brücke/Stadt) + Wetter + Parallax. */
+/* Pixel-Canvas v3.3: Level-gated Arena-FX, Wetter-Sync, Parallax. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -712,13 +712,23 @@
     if (id === levelId && layers) return levelId;
     levelId = id;
     layers = null;
-    // Wetter-Bias beim Levelwechsel
-    if (typeof wetter !== 'undefined' && Plaza.Levels && Plaza.Levels.weatherBias) {
-      wetter.typ = Plaza.Levels.weatherBias(id) || 'klar';
+    camX = 0;
+    // Wetter-Bias beim Levelwechsel (next erst nach erstem Tick gesetzt)
+    if (typeof wetter !== 'undefined') {
+      var bias = (Plaza.Levels && Plaza.Levels.weatherBias) ? Plaza.Levels.weatherBias(id) : 'klar';
+      wetter.typ = bias || 'klar';
       wetter.blend = 0;
-      wetter.next = (wetter.next || 0);
+      wetter.blitz = 0;
+      wetter.next = -1; // wetterTick setzt beim nächsten Aufruf
     }
     return levelId;
+  }
+  function applyWetter(st) {
+    if (!st || typeof st !== 'object') return;
+    if (st.typ) wetter.typ = st.typ;
+    if (typeof st.blitz === 'number') wetter.blitz = st.blitz;
+    if (typeof st.next === 'number') wetter.next = st.next;
+    if (typeof st.blend === 'number') wetter.blend = st.blend;
   }
   function getLevel() { return levelId; }
 
@@ -800,7 +810,11 @@
   var WETTER_PHASEN = ['klar', 'regen', 'gewitter', 'sonne'];
   var wetter = { typ: 'klar', next: 900, blend: 0, blitz: 0, wind: 1 };
   function wetterTick(tick) {
-    if (tick >= wetter.next) {
+    if (wetter.next < 0) {
+      // frischer Level-Start: Phase halten, ersten Wechsel planen
+      wetter.next = tick + 1080 + ((tick * 17) % 1320);
+      wetter.blend = 1;
+    } else if (tick >= wetter.next) {
       var i = WETTER_PHASEN.indexOf(wetter.typ);
       wetter.typ = WETTER_PHASEN[(i + 1) % WETTER_PHASEN.length];
       // 18–40 s bei 60 Hz
@@ -898,119 +912,182 @@
     if (hopT > 0) hopT--;
     wetterTick(tick);
 
-    // L0 + Blutmond-Puls
+    // L0
     drawLayer(ctx, layers.L0, PAR.L0, tick, 'L0');
-    if ((tick % 90) < 10) {
-      ctx.fillStyle = 'rgba(255,60,20,0.14)';
-      ctx.beginPath(); ctx.arc(MOND.x + ofs(PAR.L0, 'L0', tick), MOND.y, MOND.r + 24, 0, Math.PI * 2); ctx.fill();
+    if (levelId === 'hoelle') {
+      // Blutmond-Puls
+      if ((tick % 90) < 10) {
+        ctx.fillStyle = 'rgba(255,60,20,0.14)';
+        ctx.beginPath(); ctx.arc(MOND.x + ofs(PAR.L0, 'L0', tick), MOND.y, MOND.r + 24, 0, Math.PI * 2); ctx.fill();
+      }
     }
-    // L1 + Krater-Flackern
+
+    // L1
     drawLayer(ctx, layers.L1, PAR.L1, tick, 'L1');
-    o = ofs(PAR.L1, 'L1', tick);
-    var vf = ((tick / 6) | 0) % 4;
-    for (i = 0; i < KRATER.length; i++) {
-      var kx = KRATER[i][0] + o, ky = KRATER[i][1], v = (vf + i) % 4;
-      ctx.fillStyle = v < 2 ? G[9] : G[10];
-      ctx.fillRect(kx - 8, ky - 6 - v * 2, 16, 4 + v * 2);
-      ctx.fillStyle = G[10];
-      ctx.fillRect(kx - 4 + ((v * 3) % 7), ky - 14 - v * 6, 2, 4);
+    if (levelId === 'hoelle') {
+      o = ofs(PAR.L1, 'L1', tick);
+      var vf = ((tick / 6) | 0) % 4;
+      for (i = 0; i < KRATER.length; i++) {
+        var kx = KRATER[i][0] + o, ky = KRATER[i][1], v = (vf + i) % 4;
+        ctx.fillStyle = v < 2 ? G[9] : G[10];
+        ctx.fillRect(kx - 8, ky - 6 - v * 2, 16, 4 + v * 2);
+        ctx.fillStyle = G[10];
+        ctx.fillRect(kx - 4 + ((v * 3) % 7), ky - 14 - v * 6, 2, 4);
+      }
     }
-    // L2 + Glocke + Neon „PLAZA“
+
+    // L2
     drawLayer(ctx, layers.L2, PAR.L2, tick, 'L2');
-    o = ofs(PAR.L2, 'L2', tick);
-    ctx.globalAlpha = 0.18 + 0.12 * Math.sin(tick / 11);
-    ctx.fillStyle = G[9];
-    ctx.fillRect(GLOCKE.x + o - 16, GLOCKE.y - 20, 32, 34);
-    ctx.globalAlpha = 1;
-    var glow = (tick % 40) < 28;
-    if (glow) {
-      ctx.fillStyle = 'rgba(255,58,8,0.22)';
-      ctx.fillRect(NEON.x + o - 92, 266, 184, 42);
+    if (levelId === 'hoelle') {
+      o = ofs(PAR.L2, 'L2', tick);
+      ctx.globalAlpha = 0.18 + 0.12 * Math.sin(tick / 11);
+      ctx.fillStyle = G[9];
+      ctx.fillRect(GLOCKE.x + o - 16, GLOCKE.y - 20, 32, 34);
+      ctx.globalAlpha = 1;
+      var glow = (tick % 40) < 28;
+      if (glow) {
+        ctx.fillStyle = 'rgba(255,58,8,0.22)';
+        ctx.fillRect(NEON.x + o - 92, 266, 184, 42);
+      }
+      ctx.fillStyle = glow ? '#ff3a08' : '#801808';
+      ctx.font = 'bold 40px ' + SCHRIFT;
+      ctx.textAlign = 'center';
+      ctx.fillText('PLAZA', NEON.x + o, NEON.y);
+    } else if (levelId === 'stadt') {
+      // Neon-Flicker in der Ruinenstadt
+      o = ofs(PAR.L2, 'L2', tick);
+      if ((tick % 50) < 32) {
+        ctx.fillStyle = 'rgba(255,58,8,0.18)';
+        ctx.fillRect(310 + o, 360, 90, 20);
+        ctx.fillStyle = 'rgba(64,160,255,0.18)';
+        ctx.fillRect(990 + o, 340, 110, 20);
+      }
     }
-    ctx.fillStyle = glow ? '#ff3a08' : '#801808';
-    ctx.font = 'bold 40px ' + SCHRIFT;
-    ctx.textAlign = 'center';
-    ctx.fillText('PLAZA', NEON.x + o, NEON.y);
-    // Publikum (hinter der Balustrade von L3)
+
+    // Publikum nur Hölle (Dämonen)
     o = ofs(PAR.L3, 'L3', tick);
-    for (i = 0; i < PUBLIKUM.length; i++) {
-      var pu = PUBLIKUM[i], dy = ((tick / 20 + i * 1.7) | 0) % 2 * 2;
-      if (hopT > 0) dy += Math.round(Math.abs(Math.sin((20 - hopT) * 0.45 + i * 0.9)) * 14);
-      ctx.drawImage(layers.daemon[hopT > 0 ? 1 - pu[2] : pu[2]], pu[0] + o - 20, pu[1] - dy);
+    if (levelId === 'hoelle' && layers.daemon) {
+      for (i = 0; i < PUBLIKUM.length; i++) {
+        var pu = PUBLIKUM[i], dy = ((tick / 20 + i * 1.7) | 0) % 2 * 2;
+        if (hopT > 0) dy += Math.round(Math.abs(Math.sin((20 - hopT) * 0.45 + i * 0.9)) * 14);
+        ctx.drawImage(layers.daemon[hopT > 0 ? 1 - pu[2] : pu[2]], pu[0] + o - 20, pu[1] - dy);
+      }
     }
-    // L3 + Brunnen (Tropfen auf Parabeln, Glitzer, Strahl) + Kiosk-Feuer
+
+    // L3 + hell-only Brunnen/Kiosk
     drawLayer(ctx, layers.L3, PAR.L3, tick, 'L3');
-    var bx = BRUNNEN.x + o;
-    f = ((tick / 5) | 0) % 4;
-    ctx.fillStyle = f % 2 ? G[9] : '#ff6020';
-    ctx.fillRect(bx - 2, BRUNNEN.top - 10 - f * 2, 4, 10 + f * 2);
-    ctx.fillStyle = G[10];
-    ctx.fillRect(bx - 1, BRUNNEN.top - 4, 2, 4);
-    for (i = 0; i < 8; i++) {
-      var ft = (tick + i * 3) % 24, vx = (i % 2 ? 1 : -1) * (0.8 + (i % 4) * 0.45);
-      var dx = bx + vx * ft, dyy = BRUNNEN.top - 6 - 4 * ft + 0.3 * ft * ft;
-      ctx.fillStyle = G[8];
-      ctx.fillRect(Math.round(dx - vx * 2), Math.round(dyy + 3), 2, 2);
-      ctx.fillStyle = ft < 16 ? G[10] : G[9];
-      ctx.fillRect(Math.round(dx), Math.round(dyy), 4, 4);
+    if (levelId === 'hoelle') {
+      var bx = BRUNNEN.x + o;
+      f = ((tick / 5) | 0) % 4;
+      ctx.fillStyle = f % 2 ? G[9] : '#ff6020';
+      ctx.fillRect(bx - 2, BRUNNEN.top - 10 - f * 2, 4, 10 + f * 2);
+      ctx.fillStyle = G[10];
+      ctx.fillRect(bx - 1, BRUNNEN.top - 4, 2, 4);
+      for (i = 0; i < 8; i++) {
+        var ft = (tick + i * 3) % 24, vx = (i % 2 ? 1 : -1) * (0.8 + (i % 4) * 0.45);
+        var dx = bx + vx * ft, dyy = BRUNNEN.top - 6 - 4 * ft + 0.3 * ft * ft;
+        ctx.fillStyle = G[8];
+        ctx.fillRect(Math.round(dx - vx * 2), Math.round(dyy + 3), 2, 2);
+        ctx.fillStyle = ft < 16 ? G[10] : G[9];
+        ctx.fillRect(Math.round(dx), Math.round(dyy), 4, 4);
+      }
+      ctx.fillStyle = G[11];
+      var gs = (tick >> 2);
+      for (i = 0; i < 6; i++) {
+        var gh = (gs * 7 + i * 13) % 17;
+        ctx.fillRect(bx - 40 + ((gh * 5 + i * 11) % 80), BRUNNEN.schale - 2 + (i % 3) * 2, 2, 2);
+      }
+      ctx.fillStyle = G[9];
+      var sd = (tick % 30) * 3;
+      ctx.fillRect(bx - 56, 440 + sd, 2, 6);
+      ctx.fillRect(bx + 54, 440 + ((sd + 40) % 90), 2, 6);
+      var kf = ((tick / 4) | 0) % 3, kxx = KIOSK.x + o;
+      ctx.fillStyle = G[8]; ctx.fillRect(kxx - 12, KIOSK.y - 12 - kf * 2, 24, 12 + kf * 2);
+      ctx.fillStyle = G[10]; ctx.fillRect(kxx - 6 + kf * 2, KIOSK.y - 22 + kf * 2, 8, 20 - kf * 2);
+      ctx.fillStyle = G[11]; ctx.fillRect(kxx - 2, KIOSK.y - 10, 4, 8);
+    } else if (levelId === 'bruecke') {
+      // Laternen-Puls (Positionen analog bakeBruecke)
+      o = ofs(PAR.L3, 'L3', tick);
+      for (i = 0; i < 6; i++) {
+        var lx = 160 + i * 240 + o;
+        var pul = 0.35 + 0.25 * Math.sin(tick / 12 + i);
+        ctx.fillStyle = 'rgba(255,154,56,' + pul.toFixed(2) + ')';
+        ctx.fillRect(lx - 6, 394, 18, 12);
+      }
+    } else if (levelId === 'dschungel') {
+      // Glühwürmchen
+      o = ofs(PAR.L3, 'L3', tick);
+      for (i = 0; i < 16; i++) {
+        var fx = ((i * 97 + tick * 0.4) % LW) + o;
+        var fy = 280 + ((i * 53 + tick) % 220);
+        var fa = 0.25 + 0.55 * (0.5 + 0.5 * Math.sin(tick / 8 + i));
+        ctx.fillStyle = (i % 3 === 0) ? 'rgba(200,255,120,' + fa.toFixed(2) + ')' : 'rgba(255,230,80,' + fa.toFixed(2) + ')';
+        ctx.fillRect(Math.round(fx), Math.round(fy), 3, 3);
+      }
     }
-    ctx.fillStyle = G[11];
-    var gs = (tick >> 2);
-    for (i = 0; i < 6; i++) {
-      var gh = (gs * 7 + i * 13) % 17;
-      ctx.fillRect(bx - 40 + ((gh * 5 + i * 11) % 80), BRUNNEN.schale - 2 + (i % 3) * 2, 2, 2);
-    }
-    ctx.fillStyle = G[9];
-    var sd = (tick % 30) * 3;                         // Tropfen im Überlauf
-    ctx.fillRect(bx - 56, 440 + sd, 2, 6);
-    ctx.fillRect(bx + 54, 440 + ((sd + 40) % 90), 2, 6);
-    var kf = ((tick / 4) | 0) % 3, kxx = KIOSK.x + o;
-    ctx.fillStyle = G[8]; ctx.fillRect(kxx - 12, KIOSK.y - 12 - kf * 2, 24, 12 + kf * 2);
-    ctx.fillStyle = G[10]; ctx.fillRect(kxx - 6 + kf * 2, KIOSK.y - 22 + kf * 2, 8, 20 - kf * 2);
-    ctx.fillStyle = G[11]; ctx.fillRect(kxx - 2, KIOSK.y - 10, 4, 8);
-    // L4 + pulsierende Risse + Medaillon-Glut
+
+    // L4
     drawLayer(ctx, layers.L4, PAR.L4, tick, 'L4');
     o = ofs(PAR.L4, 'L4', tick);
-    var rl = layers.L4r && layers.L4r[((tick / 16) | 0) % 3];
-    if (rl) ctx.drawImage(rl, o, 600);
-    var pulse = 0.10 + 0.08 * Math.sin(tick / 14);
-    ctx.fillStyle = 'rgba(255,58,8,' + pulse.toFixed(3) + ')';
-    ctx.beginPath(); ctx.ellipse(720 + o, 704, 150, 44, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(255,176,64,' + (pulse * 0.8).toFixed(3) + ')';
-    ctx.beginPath(); ctx.ellipse(720 + o, 704, 30, 9, 0, 0, Math.PI * 2); ctx.fill();
-    // Funkenregen: 24 Partikel, rein aus tick berechnet (keine Allokation)
-    for (i = 0; i < 24; i++) {
-      var life = 220 + (i * 37) % 120, ph = (tick + i * 53) % life;
-      var ey = 768 - ph * (1.6 + (i % 5) * 0.3);
-      if (ey < 120) continue;
-      var ex = ((i * 197 + 61) % LW) + Math.sin((tick + i * 20) / 18) * 10 + ofs(PAR.L4, 'L4', tick);
-      ctx.fillStyle = (ey > 480 && ey < 640) ? G[6] : (ph < life * 0.4 ? G[10] : G[8]);
-      ctx.fillRect(Math.round(ex), Math.round(ey), 2, 2);
-    }
-    // v2.9: Asche-Schleier driftet (L1-Tempo), Heat-Shimmer am Boden — dynamisch, nicht starr
-    for (i = 0; i < 18; i++) {
-      var ax = ((i * 71 + tick * 0.55) % LW) + ofs(PAR.L1, 'L1', tick);
-      var ay = 200 + ((i * 97 + tick) % 280);
-      ctx.fillStyle = 'rgba(40,20,30,' + (0.18 + (i % 3) * 0.06).toFixed(2) + ')';
-      ctx.fillRect(Math.round(ax), Math.round(ay), 3 + (i % 2), 2);
-    }
-    var shim = Math.sin(tick / 9) * 3;
-    ctx.fillStyle = 'rgba(255,120,40,0.045)';
-    for (i = 0; i < 5; i++) {
-      var sy = 560 + i * 18 + Math.round(Math.sin(tick / 7 + i) * 4);
-      ctx.fillRect(0, sy, W, 3);
-      ctx.fillRect(Math.round(shim * (i + 1)), sy + 6, W, 2);
+    if (levelId === 'hoelle') {
+      var rl = layers.L4r && layers.L4r[((tick / 16) | 0) % 3];
+      if (rl) ctx.drawImage(rl, o, 600);
+      var pulse = 0.10 + 0.08 * Math.sin(tick / 14);
+      ctx.fillStyle = 'rgba(255,58,8,' + pulse.toFixed(3) + ')';
+      ctx.beginPath(); ctx.ellipse(720 + o, 704, 150, 44, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,176,64,' + (pulse * 0.8).toFixed(3) + ')';
+      ctx.beginPath(); ctx.ellipse(720 + o, 704, 30, 9, 0, 0, Math.PI * 2); ctx.fill();
+      for (i = 0; i < 24; i++) {
+        var life = 220 + (i * 37) % 120, ph = (tick + i * 53) % life;
+        var ey = 768 - ph * (1.6 + (i % 5) * 0.3);
+        if (ey < 120) continue;
+        var ex = ((i * 197 + 61) % LW) + Math.sin((tick + i * 20) / 18) * 10 + ofs(PAR.L4, 'L4', tick);
+        ctx.fillStyle = (ey > 480 && ey < 640) ? G[6] : (ph < life * 0.4 ? G[10] : G[8]);
+        ctx.fillRect(Math.round(ex), Math.round(ey), 2, 2);
+      }
+      for (i = 0; i < 18; i++) {
+        var ax = ((i * 71 + tick * 0.55) % LW) + ofs(PAR.L1, 'L1', tick);
+        var ay = 200 + ((i * 97 + tick) % 280);
+        ctx.fillStyle = 'rgba(40,20,30,' + (0.18 + (i % 3) * 0.06).toFixed(2) + ')';
+        ctx.fillRect(Math.round(ax), Math.round(ay), 3 + (i % 2), 2);
+      }
+      // Heat-Shimmer am Boden — dynamisch, nicht starr (v2.9)
+      var shim = Math.sin(tick / 9) * 3;
+      ctx.fillStyle = 'rgba(255,120,40,0.045)';
+      for (i = 0; i < 5; i++) {
+        var sy = 560 + i * 18 + Math.round(Math.sin(tick / 7 + i) * 4);
+        ctx.fillRect(0, sy, W, 3);
+        ctx.fillRect(Math.round(shim * (i + 1)), sy + 6, W, 2);
+      }
+    } else if (levelId === 'stadt') {
+      // Asche / Glut-Funken
+      for (i = 0; i < 20; i++) {
+        var life2 = 180 + (i * 41) % 100, ph2 = (tick + i * 47) % life2;
+        var ey2 = 720 - ph2 * 1.4;
+        if (ey2 < 200) continue;
+        var ex2 = ((i * 163 + 40) % LW) + Math.sin((tick + i) / 20) * 8 + o;
+        ctx.fillStyle = ph2 < 40 ? '#ff6020' : '#5a3030';
+        ctx.fillRect(Math.round(ex2), Math.round(ey2), 2, 2);
+      }
+    } else if (levelId === 'dschungel') {
+      // fallende Blätter
+      for (i = 0; i < 12; i++) {
+        var ly = ((tick * 1.2 + i * 70) % (H + 40)) - 20;
+        var lx = ((i * 130 + tick * 0.3) % LW) + o + Math.sin(tick / 15 + i) * 12;
+        ctx.fillStyle = (i % 2) ? '#2a6838' : '#1a4028';
+        ctx.fillRect(Math.round(lx), Math.round(ly), 5, 3);
+      }
     }
   }
 
   function fg(ctx, tick) {
     if (!layers) return;
     drawLayer(ctx, layers.L5, PAR.L5, tick, 'L5');
+    if (levelId !== 'hoelle') return; // Fackeln/Kegel nur Hölle
     var o = ofs(PAR.L5, 'L5', tick), f = ((tick / 5) | 0) % 3;
     var ps = arenaSnap && arenaSnap.p;
     for (var i = 0; i < FACKELN.length; i++) {
       var fx = FACKELN[i] + o, a = 1;
-      // halbtransparent, wenn ein Spieler dahinter steht
       for (var j = 0; ps && j < ps.length; j++) if (Math.abs(ps[j].x - fx) < 56) a = 0.4;
       ctx.globalAlpha = a;
       if (layers.L5f) ctx.drawImage(layers.L5f, FACKELN[i] - 40, 520, 80, 248, fx - 40, 520, 80, 248);
@@ -3094,7 +3171,8 @@
     puffer: function () { return BUF; },
     erstelle: erstelle, setzePuffer: setzePuffer,
     zeichne: zeichne, menueHint: menueHint, banner: banner, portrait: portrait, resetFx: resetFx,
-    wetterState: function () { return { typ: wetter.typ, blitz: wetter.blitz, next: wetter.next }; },
+    wetterState: function () { return { typ: wetter.typ, blitz: wetter.blitz, next: wetter.next, blend: wetter.blend }; },
+    applyWetter: applyWetter,
     setLevel: setLevel, getLevel: getLevel,
     levels: function () { return (Plaza.Levels && Plaza.Levels.LISTE) || [{ id: 'hoelle', name: 'Hölle' }]; }
   };

@@ -1,8 +1,8 @@
-/* Einstieg, Spielschleife, Host/Client-Logik. v3.2 — Level-Detail + Sync. */
+/* Einstieg, Spielschleife, Host/Client-Logik. v3.3 — QA: Level-FX-Gates + Wetter-Sync. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION = 'v3.2';
+  var VERSION = 'v3.3';
   Plaza.VERSION = VERSION;
   function sanitizeName(n) {
     n = String(n == null ? '' : n).replace(/[\u0000-\u001f<>]/g, '').trim();
@@ -270,7 +270,7 @@
         mode = 'menue';
         ui.showScreen('menue');
         ui.setStatus('');
-        Plaza.Render.menueHint(render, 'Versus · Solo · v3.2');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v3.3');
       },
       onHost: function () {
         soloMode = false;
@@ -434,7 +434,10 @@
       if (!(netz && netz.istHost() && kampf)) return;
       var snap = Plaza.Kampf.snapshot(kampf);
       letzterSnap = snap;
-      netz.sende({ typ: 'state', state: snap, level: currentLevel() });
+      netz.sende({
+        typ: 'state', state: snap, level: currentLevel(),
+        wetter: (Plaza.Render && Plaza.Render.wetterState) ? Plaza.Render.wetterState() : null
+      });
     }
 
     netz = Plaza.Netz.erstelle({
@@ -508,7 +511,10 @@
             netDown = false; ui.setStatus('Mitspieler da — Charakter wählen');
             if (netz.istHost()) {
               netz.sende({ typ: 'seat', seite: seite, ver: VERSION });
-              netz.sende({ typ: 'level', level: currentLevel(), ver: VERSION });
+              netz.sende({
+                typ: 'level', level: currentLevel(), ver: VERSION,
+                wetter: (Plaza.Render && Plaza.Render.wetterState) ? Plaza.Render.wetterState() : null
+              });
             }
             // eigenen Namen nochmal schicken
             netz.sende({ typ: 'name', seite: 0, name: hostName || liesName() });
@@ -519,6 +525,7 @@
             applyLevel(msg.level);
             if (ui.setLevel) ui.setLevel(msg.level);
           }
+          if (msg.wetter && Plaza.Render && Plaza.Render.applyWetter) Plaza.Render.applyWetter(msg.wetter);
         }
         if (msg.typ === 'wahl') {
           if (msg.ver && msg.ver !== VERSION) {
@@ -544,6 +551,7 @@
             applyLevel(msg.level);
             if (ui.setLevel) ui.setLevel(msg.level);
           }
+          if (msg.wetter && Plaza.Render && Plaza.Render.applyWetter) Plaza.Render.applyWetter(msg.wetter);
           letzterSnap = msg.state;
           if (mode !== 'kampf') {
             mode = 'kampf';
@@ -739,7 +747,7 @@
         }
         acc = 0;
       } else if (mode === 'menue') {
-        Plaza.Render.menueHint(render, 'Versus · Solo · v3.2');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v3.3');
         acc = 0;
       } else {
         Plaza.Render.menueHint(render, statusElText());

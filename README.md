@@ -1,3 +1,9 @@
+## v3.3 QA Level-FX + Wetter-Sync
+
+Höllen-Overlays (Neon/Brunnen/Fackeln) nur in Hölle; Ambient pro Arena. Wetter-State im Netz-Sync.
+
+Live: https://topsentopsen.github.io/plaza-kampf/?v=3.3
+
 ## v3.2 Level-Detail + Sync
 
 Gast übernimmt Host-Arena (UI+Render). Feinschliff der Arenen-Bäcker.
