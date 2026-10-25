@@ -46,7 +46,7 @@ var kampfSrc = require('fs').readFileSync(path.join(root, 'js/kampf.js'), 'utf8'
 assert.ok(kampfSrc.indexOf('1280') !== -1 || kampfSrc.indexOf('BODEN') !== -1);
 
 var main = require('fs').readFileSync(path.join(root, 'js/main.js'), 'utf8');
-assert.ok(/VERSION = 'v3\.4'/.test(main), 'VERSION v3.4');
+assert.ok(/VERSION = 'v3\.5'/.test(main), 'VERSION v3.5');
 var html = require('fs').readFileSync(path.join(root, 'index.html'), 'utf8');
 assert.ok(html.indexOf('1280') !== -1 || html.indexOf('canvas') !== -1);
 

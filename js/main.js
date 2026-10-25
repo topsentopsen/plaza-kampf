@@ -1,8 +1,8 @@
-/* Einstieg, Spielschleife, Host/Client-Logik. v3.4 — QA: Swap-Input/Wahl + Endscreen. */
+/* Einstieg, Spielschleife, Host/Client-Logik. v3.5 — QA: Level-Rebroadcast, Input-HB, Touch. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION = 'v3.4';
+  var VERSION = 'v3.5';
   Plaza.VERSION = VERSION;
   function sanitizeName(n) {
     n = String(n == null ? '' : n).replace(/[\u0000-\u001f<>]/g, '').trim();
@@ -242,7 +242,15 @@
     var ui = Plaza.UI.erstelle({
       root: document.body,
       getLink: function () { return netz ? netz.linkFuer(null, false) : ''; },
-      onLevel: function (id) { applyLevel(id); },
+      onLevel: function (id) {
+        applyLevel(id);
+        if (netz && netz.istHost() && netz.istBereit() && mode !== 'kampf' && mode !== 'ende') {
+          netz.sende({
+            typ: 'level', level: id, ver: VERSION,
+            wetter: (Plaza.Render && Plaza.Render.wetterState) ? Plaza.Render.wetterState() : null
+          });
+        }
+      },
       onSolo: function () {
         soloMode = true;
         applyLevel(ui.getLevel ? ui.getLevel() : currentLevel());
@@ -273,7 +281,7 @@
         mode = 'menue';
         ui.showScreen('menue');
         ui.setStatus('');
-        Plaza.Render.menueHint(render, 'Versus · Solo · v3.4');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v3.5');
       },
       onHost: function () {
         soloMode = false;
@@ -748,6 +756,12 @@
           ui.showScreen('kampf');
         }
       } else if ((mode === 'kampf' || mode === 'ende') && letzterSnap) {
+        // Gast: Input periodisch erneut senden (Paketverlust → sonst sticky keys)
+        if (mode === 'kampf' && netz && !netz.istHost() && netz.istBereit()) {
+          if ((framesDrawn % 6) === 0) {
+            netz.sende({ typ: 'input', seite: seite, input: lokalInput });
+          }
+        }
         if (!tabHidden) { Plaza.Render.zeichne(render, letzterSnap, seite); framesDrawn++; } else { framesSkipped++; }
         if (netDown && Plaza.Render.banner) Plaza.Render.banner(render, 'VERBINDUNG WEG — Nochmal');
         if (letzterSnap.phase === 'ende') {
@@ -763,7 +777,7 @@
         }
         acc = 0;
       } else if (mode === 'menue') {
-        Plaza.Render.menueHint(render, 'Versus · Solo · v3.4');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v3.5');
         acc = 0;
       } else {
         Plaza.Render.menueHint(render, statusElText());

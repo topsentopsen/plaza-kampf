@@ -1,10 +1,10 @@
-/* v3.4: Side-swap seat slots + peer input + endscreen seite */
+/* v3.5: Side-swap seat slots + peer input + endscreen seite */
 var assert = require('assert');
 var fs = require('fs');
 var path = require('path');
 var main = fs.readFileSync(path.join(__dirname, '..', 'js/main.js'), 'utf8');
 
-assert.ok(main.indexOf("var VERSION = 'v3.4'") !== -1, 'VERSION v3.4');
+assert.ok(main.indexOf("var VERSION = 'v3.5'") !== -1, 'VERSION v3.5');
 assert.ok(main.indexOf('clearPeerInput') !== -1, 'clearPeerInput');
 assert.ok(main.indexOf('msg.seite !== seite') !== -1, 'peer input any other seite');
 assert.ok(main.indexOf("msg.seite === 1) peerInput") === -1, 'old seite===1-only input gone');
@@ -16,6 +16,6 @@ assert.ok(main.indexOf('Host seite===1 → Host rechts: Chars tauschen') === -1,
 assert.ok(main.indexOf('clearPeerInput()') !== -1, 'peerInput cleared on start/rematch');
 
 var netz = fs.readFileSync(path.join(__dirname, '..', 'js/netz.js'), 'utf8');
-assert.ok(netz.indexOf("VERSION_Q = '3.4'") !== -1, 'VERSION_Q 3.4');
+assert.ok(netz.indexOf("VERSION_Q = '3.5'") !== -1, 'VERSION_Q 3.5');
 
 console.log('ok — swap-seat.test.js');

@@ -12,5 +12,7 @@ assert.ok(html.indexOf('overscroll-behavior') !== -1);
 assert.ok(html.indexOf('min-width: 64px') !== -1, 'coarse pointer pad size');
 assert.ok(ui.indexOf('pointerdown') !== -1);
 assert.ok(ui.indexOf('setPointerCapture') !== -1, 'pointer capture');
+assert.ok(ui.indexOf('lostpointercapture') !== -1, 'lostpointercapture');
+assert.ok(ui.indexOf('hasPointerCapture') !== -1, 'leave gated by capture');
 assert.ok(man.indexOf('display') !== -1);
 console.log('ok — mobile-touch.test.js');

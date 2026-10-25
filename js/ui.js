@@ -1,4 +1,4 @@
-/* Menü, Charakterwahl, Touch-Steuerung. v3.1 — Level-Picker */
+/* Menü, Charakterwahl, Touch-Steuerung. v3.5 — pointer-capture hart. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -140,8 +140,15 @@
           down(ev);
         });
         el.addEventListener('pointerup', up);
-        el.addEventListener('pointerleave', up);
         el.addEventListener('pointercancel', up);
+        el.addEventListener('lostpointercapture', up);
+        // leave nur ohne Capture (sonst iOS/Desktop: Finger noch drauf, leave → sticky off)
+        el.addEventListener('pointerleave', function (ev) {
+          try {
+            if (el.hasPointerCapture && ev.pointerId != null && el.hasPointerCapture(ev.pointerId)) return;
+          } catch (eL) {}
+          up(ev);
+        });
       }
       bind(controls.querySelector('[data-k="l"]'), 'l');
       bind(controls.querySelector('[data-k="r"]'), 'r');

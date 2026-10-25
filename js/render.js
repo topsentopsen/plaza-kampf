@@ -1,4 +1,4 @@
-/* Pixel-Canvas v3.4: QA Swap-Input/Wahl + Endscreen (Arena unverändert). */
+/* Pixel-Canvas v3.5: QA Input-HB / Touch (Arena unverändert). */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};

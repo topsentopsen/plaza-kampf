@@ -1,8 +1,8 @@
-## v3.4 QA Swap-Input / Endscreen
+## v3.5 QA Swap-Input / Endscreen
 
 Seite tauschen: Char-Slots + Peer-Input korrekt; Host-Endscreen „Gewonnen/Verloren“ nach eigener Seite; Rematch FX-Reset; Gast-Endscreen ohne Flackern.
 
-Live: https://topsentopsen.github.io/plaza-kampf/?v=3.4
+Live: https://topsentopsen.github.io/plaza-kampf/?v=3.5
 
 ## v3.3 QA Level-FX + Wetter-Sync
 
