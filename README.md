@@ -1,3 +1,9 @@
+## v3.4 QA Swap-Input / Endscreen
+
+Seite tauschen: Char-Slots + Peer-Input korrekt; Host-Endscreen „Gewonnen/Verloren“ nach eigener Seite; Rematch FX-Reset; Gast-Endscreen ohne Flackern.
+
+Live: https://topsentopsen.github.io/plaza-kampf/?v=3.4
+
 ## v3.3 QA Level-FX + Wetter-Sync
 
 Höllen-Overlays (Neon/Brunnen/Fackeln) nur in Hölle; Ambient pro Arena. Wetter-State im Netz-Sync.

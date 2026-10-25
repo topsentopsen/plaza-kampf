@@ -1,4 +1,4 @@
-/* Pixel-Canvas v3.3: Level-gated Arena-FX, Wetter-Sync, Parallax. */
+/* Pixel-Canvas v3.4: QA Swap-Input/Wahl + Endscreen (Arena unverändert). */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};

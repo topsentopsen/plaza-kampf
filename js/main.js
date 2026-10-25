@@ -1,8 +1,8 @@
-/* Einstieg, Spielschleife, Host/Client-Logik. v3.3 — QA: Level-FX-Gates + Wetter-Sync. */
+/* Einstieg, Spielschleife, Host/Client-Logik. v3.4 — QA: Swap-Input/Wahl + Endscreen. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION = 'v3.3';
+  var VERSION = 'v3.4';
   Plaza.VERSION = VERSION;
   function sanitizeName(n) {
     n = String(n == null ? '' : n).replace(/[\u0000-\u001f<>]/g, '').trim();
@@ -44,6 +44,9 @@
     var netz = null;
     var lokalInput = { l: false, r: false, u: false, d: false, a: false, b: false, c: false };
     var peerInput = { l: false, r: false, u: false, d: false, a: false, b: false, c: false };
+    function clearPeerInput() {
+      peerInput = { l: false, r: false, u: false, d: false, a: false, b: false, c: false };
+    }
     var mode = 'menue';
     var hostWahl = null, gastWahl = null;
     var pendingRaum = null;
@@ -270,7 +273,7 @@
         mode = 'menue';
         ui.showScreen('menue');
         ui.setStatus('');
-        Plaza.Render.menueHint(render, 'Versus · Solo · v3.3');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v3.4');
       },
       onHost: function () {
         soloMode = false;
@@ -343,7 +346,8 @@
           startSolo();
           return;
         }
-        if (netz && netz.istHost()) { hostWahl = id; hostName = nm || hostName; }
+        // Slots = Sim-Index/Seite (nicht „Host-Rolle“): seite 0 → hostWahl, 1 → gastWahl
+        if (seite === 0) { hostWahl = id; hostName = nm || hostName; }
         else { gastWahl = id; gastName = nm || gastName; }
         if (netz && netz.istBereit()) {
           netz.sende({ typ: 'wahl', charId: id, seite: seite, ver: VERSION, name: nm });
@@ -370,6 +374,9 @@
           kampf.tick = 0;
           mode = 'kampf';
           ui.showScreen('kampf');
+          clearPeerInput();
+          if (Plaza.Sound) Plaza.Sound.resetDiff();
+          if (Plaza.Render.resetFx) Plaza.Render.resetFx();
           broadcast();
         } else if (netz) {
           netz.sende({ typ: 'rematch', ver: VERSION });
@@ -391,12 +398,10 @@
       if (!hostWahl || !gastWahl) return;
       var n0 = hostName || Plaza.Chars.finde(hostWahl).name;
       var n1 = gastName || Plaza.Chars.finde(gastWahl).name;
+      // hostWahl/gastWahl sind bereits Sim-Slots 0/1; Input-Mapping läuft über seite
       var c0 = hostWahl, c1 = gastWahl, nm0 = n0, nm1 = n1;
-      // Host seite===1 → Host rechts: Chars tauschen, Host spielt Index 1
-      if (netz.istHost() && seite === 1) {
-        c0 = gastWahl; c1 = hostWahl; nm0 = n1; nm1 = n0;
-      }
       applyLevel(currentLevel());
+      clearPeerInput();
       kampf = Plaza.Kampf.neu(c0, c1, nm0, nm1);
       kampf.phase = 'countdown';
       kampf.countdown = 3;
@@ -544,7 +549,10 @@
           }
         }
         if (msg.typ === 'input' && netz.istHost()) {
-          if (msg.seite === 1) peerInput = msg.input || peerInput;
+          // Peer = andere Seite (auch nach Swap: Gast kann seite 0 sein)
+          if (typeof msg.seite === 'number' && msg.seite !== seite) {
+            peerInput = msg.input || peerInput;
+          }
         }
         if (msg.typ === 'state' && !netz.istHost()) {
           if (msg.level) {
@@ -560,10 +568,12 @@
             tryFullscreen();
             skalieren();
           }
-          // Ende immer zeichnen (auch wenn vorher kein Frame kam)
+          // Ende: sofort Endscreen (vorher kurz kampf erzwungen → Flackern)
           if (letzterSnap && letzterSnap.phase === 'ende') {
-            mode = 'kampf';
-            ui.showScreen('kampf');
+            mode = 'ende';
+            var wonG = letzterSnap.sieger === seite;
+            if (ui.setEnde) ui.setEnde(wonG ? 'GEWONNEN!' : (letzterSnap.sieger != null ? 'VERLOREN!' : 'Ende'), letzterSnap.nachricht || '');
+            ui.showScreen('ende');
           }
         }
         if ((msg.typ === 'swap' || msg.typ === 'seat') && mode !== 'kampf' && mode !== 'ende') {
@@ -590,6 +600,9 @@
             kampf.phase = 'countdown';
             kampf.countdown = 3;
             kampf.tick = 0;
+            clearPeerInput();
+            if (Plaza.Sound) Plaza.Sound.resetDiff();
+            if (Plaza.Render.resetFx) Plaza.Render.resetFx();
             broadcast();
           }
         }
@@ -644,6 +657,9 @@
           kampf.phase = 'countdown';
           kampf.countdown = 3;
           kampf.tick = 0;
+          clearPeerInput();
+          if (Plaza.Sound) Plaza.Sound.resetDiff();
+          if (Plaza.Render.resetFx) Plaza.Render.resetFx();
           broadcast();
         } else if (netz) netz.sende({ typ: 'rematch', ver: VERSION });
       }
@@ -723,8 +739,8 @@
         if (letzterSnap.phase === 'ende') {
           if (mode !== 'ende') {
             mode = 'ende';
-            var wonH = letzterSnap.sieger === 0;
-            if (ui.setEnde) ui.setEnde(wonH ? 'GEWONNEN!' : 'VERLOREN!', letzterSnap.nachricht || '');
+            var wonH = letzterSnap.sieger === seite;
+            if (ui.setEnde) ui.setEnde(wonH ? 'GEWONNEN!' : (letzterSnap.sieger != null ? 'VERLOREN!' : 'Ende'), letzterSnap.nachricht || '');
             ui.showScreen('ende');
           }
         } else if (mode === 'ende') {
@@ -747,7 +763,7 @@
         }
         acc = 0;
       } else if (mode === 'menue') {
-        Plaza.Render.menueHint(render, 'Versus · Solo · v3.3');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v3.4');
         acc = 0;
       } else {
         Plaza.Render.menueHint(render, statusElText());

@@ -1,4 +1,4 @@
-/* v3.3: Level-gated Arena-FX + Wetter-Sync */
+/* v3.4: Level-gated Arena-FX + Wetter-Sync */
 var assert = require('assert');
 var fs = require('fs');
 var path = require('path');
@@ -15,6 +15,6 @@ assert.ok(rend.indexOf('camX = 0') !== -1, 'cam reset on level');
 
 assert.ok(main.indexOf('applyWetter') !== -1, 'main applyWetter');
 assert.ok(main.indexOf('wetter:') !== -1 || main.indexOf('wetter: (') !== -1, 'state carries wetter');
-assert.ok(/VERSION = 'v3\.3'/.test(main), 'VERSION v3.3');
+assert.ok(/VERSION = 'v3\.4'/.test(main), 'VERSION v3.4');
 
 console.log('ok — level-fx.test.js');
