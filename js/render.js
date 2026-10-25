@@ -1,4 +1,4 @@
-/* Pixel-Canvas v3.6: iOS/PWA (Arena unverändert). */
+/* Pixel-Canvas v3.7: Landscape Overlay (Arena/Chars unverändert). */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};

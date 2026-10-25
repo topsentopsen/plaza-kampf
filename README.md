@@ -1,3 +1,9 @@
+## v3.7 Landscape Overlay-Controls
+
+Canvas füllt Landscape (visualViewport); Touch-Pads halbtransparent über dem Canvas (kein Black-Band); Duck/A sichtbar; Retina `image-rendering: auto` für detaillierte Chars (kein pixelated-Downgrade).
+
+Live: https://topsentopsen.github.io/plaza-kampf/?v=3.7
+
 ## v3.6 iOS Safari-Chrome / PWA
 
 Safari-Tab: Adressleiste lässt sich unter iOS **nicht dauerhaft** ausblenden (System-Limit). Verbesserter Einklapp-Versuch + visualViewport-Layout. **Zum Home-Bildschirm** (PWA standalone) = ohne Browser-UI. Manifest `start_url` ?v=3.6.

@@ -1,8 +1,8 @@
-/* Einstieg, Spielschleife, Host/Client-Logik. v3.6 — iOS Safari-Chrome / PWA. */
+/* Einstieg, Spielschleife, Host/Client-Logik. v3.7 — Landscape Overlay-Controls, max Canvas. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION = 'v3.6';
+  var VERSION = 'v3.7';
   Plaza.VERSION = VERSION;
   function sanitizeName(n) {
     n = String(n == null ? '' : n).replace(/[\u0000-\u001f<>]/g, '').trim();
@@ -177,7 +177,7 @@
       markIosMode();
       var land = istLandscape();
       document.body.classList.toggle('landscape', land);
-      document.body.classList.toggle('landscape-kampf', land && mode === 'kampf');
+      document.body.classList.toggle('landscape-kampf', land && (mode === 'kampf' || mode === 'ende'));
       // PWA: immer locken; Safari-Tab: lock nach Chrome-Dismiss
       scrollLock(land || mode === 'kampf' || istPwaStandalone());
       if (land && !istPwaStandalone()) hideSafariChrome();
@@ -189,43 +189,58 @@
     }
     function skalieren() {
       var vv = window.visualViewport;
-      // iOS Safari: visualViewport.height = sichtbare Fläche unter der Adressleiste
+      // iOS Safari: visualViewport = sichtbare Fläche unter der Adressleiste
       var ww = (vv && vv.width) || window.innerWidth;
       var wh = (vv && vv.height) || window.innerHeight;
-      if (istIOS() && !istPwaStandalone() && vv && vv.height > 0) {
+      if (vv && vv.height > 0) {
         wh = vv.height;
         ww = vv.width || ww;
       }
       var W = Plaza.Render.W, H = Plaza.Render.H;
       var dpr = Math.min(window.devicePixelRatio || 1, 3);
       var land = istLandscape();
-      var safeB = 0;
-      try {
-        var cs = getComputedStyle(document.documentElement);
-        // approx controls height in landscape vs portrait
-      } catch (e1) {}
-      var ctrlH = land ? Math.max(64, Math.min(90, wh * 0.18)) : Math.max(70, Math.min(110, wh * 0.22));
-      var statusH = (mode === 'kampf' && land) ? 0 : 28;
-      var maxW = ww - (land ? 4 : 12);
-      var maxH = wh - ctrlH - statusH - (land ? 4 : 16);
+      var fight = (mode === 'kampf' || mode === 'ende');
+      // v3.7: Landscape-Kampf — Controls als Overlay, Canvas nutzt volle Viewport-Fläche
+      var overlayCtrl = land && fight;
+      document.body.classList.toggle('landscape', land);
+      document.body.classList.toggle('landscape-kampf', land && fight);
+      document.body.classList.toggle('ctrl-overlay', overlayCtrl);
+      var ctrlH = land
+        ? Math.max(52, Math.min(72, Math.round(wh * 0.14)))
+        : Math.max(70, Math.min(110, wh * 0.22));
+      var statusH = (fight && land) ? 0 : 28;
+      var maxW = ww - (land ? 2 : 12);
+      var maxH;
+      if (overlayCtrl) {
+        maxH = wh - 2; // kein Pad-Streifen abziehen
+      } else {
+        maxH = wh - ctrlH - statusH - (land ? 4 : 16);
+      }
       if (maxH < 80) maxH = wh * 0.55;
-      var sfInt = Math.max(1, Math.floor(Math.min(maxW / W, maxH / H)));
-      var cssW = W * sfInt, cssH = H * sfInt;
       var soft = Math.min(maxW / W, maxH / H);
-      if (land || soft > sfInt) {
-        // Landscape: fill as much as possible (soft scale OK; buffer stays crisp)
+      var cssW, cssH;
+      if (overlayCtrl || land) {
+        // Aspect 1280×768 letterbox nur wenn nötig — maximal einpassen
         cssW = Math.floor(W * soft);
         cssH = Math.floor(H * soft);
-      } else if (sfInt <= 1) {
-        soft = Math.min(maxW / W, maxH / H, 2.5);
-        cssW = Math.floor(W * soft);
-        cssH = Math.floor(H * soft);
-      } else if (maxW > cssW + W * 0.45 && sfInt < 3) {
-        cssW = Math.floor(W * (sfInt + 0.5));
-        cssH = Math.floor(H * (sfInt + 0.5));
+      } else {
+        var sfInt = Math.max(1, Math.floor(soft));
+        cssW = W * sfInt;
+        cssH = H * sfInt;
+        if (soft > sfInt) {
+          cssW = Math.floor(W * soft);
+          cssH = Math.floor(H * soft);
+        } else if (sfInt <= 1) {
+          soft = Math.min(maxW / W, maxH / H, 2.5);
+          cssW = Math.floor(W * soft);
+          cssH = Math.floor(H * soft);
+        } else if (maxW > cssW + W * 0.45 && sfInt < 3) {
+          cssW = Math.floor(W * (sfInt + 0.5));
+          cssH = Math.floor(H * (sfInt + 0.5));
+        }
       }
       var buf = dpr >= 2.5 ? 3 : 2;
-      var key = cssW + 'x' + cssH + '@' + buf + (land ? 'L' : 'P') + mode;
+      var key = cssW + 'x' + cssH + '@' + buf + (land ? 'L' : 'P') + mode + (overlayCtrl ? 'O' : '');
       if (key === _skKey) return;
       _skKey = key;
       rahmen.style.width = cssW + 'px';
@@ -234,11 +249,22 @@
       canvas.style.height = '100%';
       if (Plaza.Render.setzePuffer) Plaza.Render.setzePuffer(render, buf);
       document.documentElement.style.setProperty('--s', String(cssW / W));
-      var pad = Math.max(land ? 48 : 56, Math.min(land ? 68 : 76, Math.round(44 + (cssW / W) * 9)));
+      // Compact pads on iPhone landscape overlay
+      var pad;
+      if (overlayCtrl) {
+        pad = Math.max(40, Math.min(52, Math.round(36 + (cssW / W) * 6)));
+      } else if (land) {
+        pad = Math.max(44, Math.min(60, Math.round(42 + (cssW / W) * 7)));
+      } else {
+        pad = Math.max(56, Math.min(76, Math.round(44 + (cssW / W) * 9)));
+      }
       document.documentElement.style.setProperty('--pad', pad + 'px');
       var hudFs = Math.max(12, Math.min(16, Math.round(11 + (cssW / W) * 1.4)));
       document.documentElement.style.setProperty('--ui', hudFs + 'px');
       document.documentElement.style.setProperty('--ctrl-h', ctrlH + 'px');
+      if (overlayCtrl) {
+        try { window.scrollTo(0, 0); } catch (eSc) {}
+      }
     }
 
 
@@ -322,7 +348,7 @@
         mode = 'menue';
         ui.showScreen('menue');
         ui.setStatus('');
-        Plaza.Render.menueHint(render, 'Versus · Solo · v3.6');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v3.7');
       },
       onHost: function () {
         soloMode = false;
@@ -823,7 +849,7 @@
         }
         acc = 0;
       } else if (mode === 'menue') {
-        Plaza.Render.menueHint(render, 'Versus · Solo · v3.6');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v3.7');
         acc = 0;
       } else {
         Plaza.Render.menueHint(render, statusElText());
@@ -864,7 +890,7 @@
     document.addEventListener('webkitfullscreenchange', function () { updateFsButton(); _skKey = ''; skalieren(); });
     skalieren();
     if ('serviceWorker' in navigator) {
-      try { navigator.serviceWorker.register('sw.js?v=3.0'); } catch (eSw) {}
+      try { navigator.serviceWorker.register('sw.js?v=3.7'); } catch (eSw) {}
     }
     requestAnimationFrame(loop);
   }
