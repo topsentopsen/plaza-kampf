@@ -15,6 +15,6 @@ assert.ok(rend.indexOf('camX = 0') !== -1, 'cam reset on level');
 
 assert.ok(main.indexOf('applyWetter') !== -1, 'main applyWetter');
 assert.ok(main.indexOf('wetter:') !== -1 || main.indexOf('wetter: (') !== -1, 'state carries wetter');
-assert.ok(/VERSION = 'v4\.1'/.test(main), 'VERSION v4.1');
+assert.ok(/VERSION = 'v4\.2'/.test(main), 'VERSION v4.2');
 
 console.log('ok — level-fx.test.js');

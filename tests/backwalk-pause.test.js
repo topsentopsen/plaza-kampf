@@ -1,4 +1,4 @@
-/* v4.1: Rückwärtslauf in Block-Stance + Pause-Menü Guards. */
+/* v4.2: Rückwärtslauf in Block-Stance + Pause-Menü Guards. */
 'use strict';
 var assert = require('assert');
 var path = require('path');
@@ -39,7 +39,7 @@ assert.ok(st.p[0].blocking, 'crouch block');
 assert.ok(st.p[0].x < x0 - 1, 'crouch backwalk moves');
 
 var main = fs.readFileSync(path.join(root, 'js/main.js'), 'utf8');
-assert.ok(/VERSION = 'v4\.1'/.test(main), 'VERSION v4.1');
+assert.ok(/VERSION = 'v4\.2'/.test(main), 'VERSION v4.2');
 assert.ok(main.indexOf('onPause:') !== -1 && main.indexOf('onAbort:') !== -1);
 assert.ok(main.indexOf('&& !paused') !== -1, 'freeze while paused');
 assert.ok(main.indexOf('netz.trennen()') !== -1, 'abort disconnect');
@@ -52,9 +52,9 @@ var html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 assert.ok(html.indexOf('id="btn-pause"') !== -1);
 assert.ok(html.indexOf('data-screen="pause"') !== -1);
 assert.ok(html.indexOf('data-act="abort"') !== -1);
-assert.ok(html.indexOf('js/main.js?v=4.1') !== -1);
+assert.ok(html.indexOf('js/main.js?v=4.2') !== -1);
 
 var netz = fs.readFileSync(path.join(root, 'js/netz.js'), 'utf8');
-assert.ok(netz.indexOf("VERSION_Q = '4.1'") !== -1);
+assert.ok(netz.indexOf("VERSION_Q = '4.2'") !== -1);
 
 console.log('ok — backwalk-pause.test.js');

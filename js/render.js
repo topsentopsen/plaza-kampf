@@ -1,4 +1,4 @@
-/* Pixel-Canvas v4.1: Landscape Overlay, Motion-VFX, Kombi-Hinweis. */
+/* Pixel-Canvas v4.2: Landscape Overlay, Motion-VFX, Kombi-Hinweis. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -3027,6 +3027,9 @@
     }
     if (ich === 0 || ich === 1) {
       text(ctx, 'Du: P' + (ich + 1), 28, true, 'rgba(232,192,144,0.9)', '#000', 24, H - 24, 'left');
+    }
+    if (Plaza.Muenzen && Plaza.Muenzen.lesen) {
+      text(ctx, Plaza.Muenzen.lesen() + ' Münzen', 26, true, '#ffe080', '#000', W - 24, H - 24, 'right');
     }
   }
 

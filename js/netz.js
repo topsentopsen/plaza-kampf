@@ -1,9 +1,11 @@
-/* Netz v0.2: MQTT-Relay (öffentlich) als Hauptweg, PeerJS+TURN als Fallback.
-   Keine Secrets — nur öffentliche Broker / OpenRelay-Demo-TURN. */
+/* Netz v4.2: MQTT bleibt Lobby und Fallback. Kampf-State und Input laufen über
+   einen ungeordneten PeerJS-DataChannel, sobald er steht — öffentliche Broker
+   klumpen 60-Hz-JSON und machen den Gast hakelig. Keine Secrets, nur öffentliche
+   Broker und die OpenRelay-Demo-TURN. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION_Q = '4.1';
+  var VERSION_Q = '4.2';
 
   var MQTT_URLS = [
     'wss://broker.emqx.io:8084/mqtt',
@@ -60,6 +62,9 @@
     var mqttClient = null;
     var peer = null;
     var conn = null;
+    var fightConn = null;
+    var localPeerId = null;
+    var remotePeerId = null;
     var peerRetryTimer = null;
     var peerTries = 0;
     var mqttIndex = 0;
@@ -94,6 +99,7 @@
       stopHeartbeat();
       heartbeatTimer = setInterval(function () {
         sende({ typ: 'hb', t: Date.now() });
+        if (localPeerId && !fightOpen()) sende({ typ: 'peer-offer', peerId: localPeerId });
         if (host && lastPeerSeen && Date.now() - lastPeerSeen > 20000) {
           status('warte-peer', { hinweis: 'Mitspieler still — Tab offen lassen?' });
         }
@@ -146,7 +152,7 @@
           }
           status(host ? 'warte' : 'suche', { via: 'mqtt' });
           if (host) {
-            mqttClient.publish(base + '/host', JSON.stringify({ from: me, t: Date.now(), raum: raum }), { retain: true, qos: 0 });
+            publishHostRecord();
             // Host ist „bereit“, wartet auf Gast-Join
           } else {
             sende({ typ: 'join', seite: 1, t: Date.now() });
@@ -160,6 +166,7 @@
         try { data = JSON.parse(raw); } catch (e1) { return; }
         if (!data) return;
         if (topic.indexOf('/host') !== -1) {
+          if (!host && data.peerId) notePeerOffer(data.peerId);
           if (!host && data.from && data.from !== me) {
             // Host da: erneut join (falls Host unsere erste Join-Msg verpasst hat)
             sende({ typ: 'join', seite: 1, t: Date.now() });
@@ -168,6 +175,7 @@
           return;
         }
         if (data.from === me) return;
+        if (data.typ === 'peer-offer') { notePeerOffer(data.peerId); return; }
         if (data.typ === 'hb') {
           lastPeerSeen = Date.now();
           if (!verbunden) markConnected();
@@ -209,6 +217,12 @@
         status('mqtt-aus', { hinweis: 'Wechsle zu PeerJS…' });
         try { if (mqttClient) mqttClient.end(true); } catch (e2) {}
         mqttClient = null;
+        if (fightOpen()) {
+          transport = 'peer';
+          conn = fightConn;
+          if (!verbunden) markConnected();
+          return;
+        }
         peerStart();
       }
     }
@@ -292,7 +306,7 @@
       status('suche', { via: 'peer', try: peerTries });
       var c;
       try {
-        c = peer.connect('plaza2-' + raum, { reliable: true, serialization: 'json' });
+        c = peer.connect('plaza2-' + raum, { reliable: false, serialization: 'json' });
       } catch (e) {
         schedulePeerRetry();
         return;
@@ -345,6 +359,79 @@
       }
     }
 
+    /* ---------- Kampf-Kanal parallel zu MQTT ---------- */
+    function fightOpen() {
+      return !!(fightConn && fightConn.open);
+    }
+
+    function publishHostRecord() {
+      if (!host || !mqttClient || !mqttClient.connected || !raum) return;
+      try {
+        mqttClient.publish(topicBase() + '/host', JSON.stringify({
+          from: me, t: Date.now(), raum: raum, peerId: localPeerId || ''
+        }), { retain: true, qos: 0 });
+      } catch (ePub) {}
+    }
+
+    function notePeerOffer(id) {
+      if (!id || id === localPeerId) return;
+      remotePeerId = id;
+      if (!host) connectFight(id);
+    }
+
+    function adoptFight(c) {
+      if (!c) return;
+      if (fightConn && fightConn !== c && fightConn.open) {
+        try { c.close(); } catch (eClose) {}
+        return;
+      }
+      fightConn = c;
+      c.on('data', function (data) {
+        if (!data || typeof data !== 'object') return;
+        if (data.from === me) return;
+        lastPeerSeen = Date.now();
+        if (data.typ === 'hb') return;
+        if (data.typ === 'peer-offer') { notePeerOffer(data.peerId); return; }
+        emitMsg(data);
+      });
+      c.on('close', function () { if (fightConn === c) fightConn = null; });
+      c.on('error', function () {});
+    }
+
+    function connectFight(id) {
+      if (host || destroyed || !peer || !id || !localPeerId) return;
+      if (fightConn && fightConn.open) return;
+      var c;
+      try {
+        // PeerJS 1.5: reliable:false → ungeordneter DataChannel (ordered:false).
+        // Ein verspätetes Snapshot blockiert die nächsten nicht.
+        c = peer.connect(id, { reliable: false, serialization: 'json' });
+      } catch (eConn) { return; }
+      adoptFight(c);
+    }
+
+    function ensureFightPeer() {
+      if (typeof Peer === 'undefined' || destroyed || peer) return;
+      try {
+        peer = new Peer(Object.assign({}, PEER_OPTS));
+      } catch (ePeer) { return; }
+      peer.on('open', function (id) {
+        localPeerId = id;
+        publishHostRecord();
+        sende({ typ: 'peer-offer', peerId: id });
+        if (!host && remotePeerId) connectFight(remotePeerId);
+      });
+      peer.on('connection', function (c) {
+        if (host) adoptFight(c);
+        else { try { c.close(); } catch (eIn) {} }
+      });
+      peer.on('error', function () { /* MQTT bleibt der Lobby-Weg */ });
+      peer.on('disconnected', function () {
+        if (destroyed || !peer) return;
+        try { peer.reconnect(); } catch (eRe) {}
+      });
+    }
+
     /* ---------- Public API ---------- */
     function hostStarten(wunschId) {
       destroyed = false;
@@ -354,6 +441,7 @@
       mqttIndex = 0;
       status('verbinde', { host: true });
       mqttStart();
+      ensureFightPeer();
     }
 
     function beitreten(raumId) {
@@ -365,19 +453,26 @@
       mqttIndex = 0;
       status('verbinde', { host: false });
       mqttStart();
+      ensureFightPeer();
     }
 
     function sende(msg) {
       if (!msg || typeof msg !== 'object') return;
       var payload = Object.assign({ from: me, v: 2 }, msg);
+      var fightMsg = payload.typ === 'state' || payload.typ === 'input';
+      if (fightMsg && fightOpen()) {
+        try { fightConn.send(payload); } catch (eF) {}
+        return;
+      }
       if (transport === 'mqtt' && mqttClient && mqttClient.connected) {
         try {
           mqttClient.publish(topicBase() + '/msg', JSON.stringify(payload), { qos: 0, retain: false });
         } catch (e) {}
         return;
       }
-      if (transport === 'peer' && conn && conn.open) {
-        try { conn.send(payload); } catch (e2) {}
+      var ch = fightOpen() ? fightConn : ((conn && conn.open) ? conn : null);
+      if (ch) {
+        try { ch.send(payload); } catch (e2) {}
       }
     }
 
@@ -385,10 +480,12 @@
       destroyed = true;
       stopHeartbeat();
       if (peerRetryTimer) clearTimeout(peerRetryTimer);
-      try { if (conn) conn.close(); } catch (e) {}
+      try { if (fightConn) fightConn.close(); } catch (eF) {}
+      try { if (conn && conn !== fightConn) conn.close(); } catch (e) {}
       try { if (peer) peer.destroy(); } catch (e2) {}
       try { if (mqttClient) mqttClient.end(true); } catch (e3) {}
-      conn = null; peer = null; mqttClient = null; verbunden = false;
+      fightConn = null; conn = null; peer = null; mqttClient = null;
+      localPeerId = null; remotePeerId = null; verbunden = false;
     }
 
     function retry() {
@@ -416,7 +513,8 @@
       istHost: function () { return host; },
       istBereit: function () { return verbunden; },
       getRaum: function () { return raum; },
-      getTransport: function () { return transport; },
+      getTransport: function () { return fightOpen() ? 'peer' : transport; },
+      hatDirekt: fightOpen,
       linkFuer: linkFuer,
       raumIdNeu: raumIdNeu
     };

@@ -1,4 +1,4 @@
-/* v4.1: Snapshot-Interpolation, keine Einzelframe-Sprünge */
+/* v4.2: Snapshot-Interpolation, keine Einzelframe-Sprünge */
 'use strict';
 var assert = require('assert');
 var fs = require('fs');
@@ -75,10 +75,10 @@ buf.reset();
 assert.equal(buf.sample(), null);
 
 var html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-assert.ok(html.indexOf('js/interp.js?v=4.1') !== -1, 'interp script tag');
+assert.ok(html.indexOf('js/interp.js?v=4.2') !== -1, 'interp script tag');
 var main = fs.readFileSync(path.join(root, 'js/main.js'), 'utf8');
 assert.ok(main.indexOf('snapInterp') !== -1 && main.indexOf('pushInterp') !== -1);
-assert.ok(/VERSION = 'v4\.1'/.test(main));
+assert.ok(/VERSION = 'v4\.2'/.test(main));
 assert.ok(main.indexOf('jeden Sim-Tick') !== -1 || main.indexOf('broadcast()') !== -1);
 assert.ok(main.indexOf('veraltetes Paket') !== -1, 'out-of-order state wird verworfen');
 
@@ -171,5 +171,27 @@ stale.push(snapAt(40, 0));
 assert.equal(stale.latest().tick, 101, 'stale tick verworfen');
 var staleView = stale.sample(6048);
 assert.ok(staleView.p[0].x > 400, 'stale tick blitzt nicht auf, x=' + staleView.p[0].x);
+
+// MQTT-Klumpen: acht Ticks auf einmal, dann 120 ms Funkstille.
+// Die Figur muss in der Pause weiterlaufen und darf pro Frame nicht springen.
+ctx._now = 8000;
+var clump = Plaza.Interp.erstelle({ delayMs: 90 });
+for (i = 0; i < 8; i++) clump.push(snapAt(200 + i, i * 12));
+var prevX = clump.sample(8000).p[0].x;
+var moved = false;
+var maxJump = 0;
+for (t = 8016; t <= 8120; t += 16) {
+  var cs = clump.sample(t);
+  var jump = Math.abs(cs.p[0].x - prevX);
+  if (jump > maxJump) maxJump = jump;
+  if (cs.p[0].x > prevX + 0.5) moved = true;
+  prevX = cs.p[0].x;
+  assert.ok(jump < 40, 'kein Frame-Sprung im Klumpen, dx=' + jump);
+}
+assert.ok(moved, 'Puffer spielt während der Funkstille weiter');
+var stt = clump.stats();
+assert.ok(stt.delayMs >= 60 && stt.delayMs <= 150, 'adaptive delay, ' + stt.delayMs);
+assert.equal(Plaza.Interp.schritt(0, 200, 40), 40);
+assert.equal(Plaza.Interp.schritt(10, 12, 40), 12);
 
 console.log('ok — interp.test.js');

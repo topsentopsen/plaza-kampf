@@ -3,7 +3,7 @@
   "short_name": "Plaza",
   "description": "Street-Fighter-Duell für zwei Handys — la Pelea del Infierno",
   "id": "./",
-  "start_url": "./?v=4.1",
+  "start_url": "./?v=4.2",
   "scope": "./",
   "display": "standalone",
   "display_override": [

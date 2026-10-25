@@ -38,4 +38,9 @@ assert.ok(main.indexOf("typ: 'level'") !== -1 && main.indexOf('onLevel') !== -1)
 assert.ok(main.indexOf("typ: 'input'") !== -1, 'Gast sendet Input');
 assert.ok(main.indexOf('Motion-Inputs') !== -1, 'Input jeden Frame für Kombis');
 assert.ok(main.indexOf('framesDrawn % 3') === -1, '20Hz-Drossel entfernt');
+assert.ok(src.indexOf('reliable: false') !== -1, 'DataChannel ungeordnet');
+assert.ok(src.indexOf("typ === 'state' || payload.typ === 'input'") !== -1, 'State/Input über Peer');
+assert.ok(src.indexOf('peer-offer') !== -1, 'Peer-Id über MQTT');
+assert.ok(main.indexOf('hatDirekt') !== -1, 'Host kennt den Direktkanal');
+assert.ok(main.indexOf('applyLocalPredict') !== -1, 'lokale Gast-Glättung');
 console.log('ok — netz-regression.test.js (v=' + Plaza.Netz.VERSION_Q + ')');

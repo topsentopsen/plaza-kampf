@@ -1,8 +1,8 @@
-/* Einstieg, Spielschleife, Host/Client-Logik. v4.1 — Tick-Playback, Praxis-KI, Motion-Specials. */
+/* Einstieg, Spielschleife, Host/Client-Logik. v4.2 — Tick-Playback, Praxis-KI, Motion-Specials. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION = 'v4.1';
+  var VERSION = 'v4.2';
   Plaza.VERSION = VERSION;
   function sanitizeName(n) {
     n = String(n == null ? '' : n).replace(/[\u0000-\u001f<>]/g, '').trim();
@@ -42,10 +42,23 @@
     var kampf = null;
     var letzterSnap = null;
     var snapInterp = (Plaza.Interp && Plaza.Interp.erstelle)
-      ? Plaza.Interp.erstelle({ delayMs: 50 })
+      ? Plaza.Interp.erstelle({ delayMs: 90 })
       : null;
+    var smoothX = null, smoothY = null;
+    var kampfNr = 0;
+    var siegMark = '';
+    var inputSeq = 0;
+    var lastPeerSeq = 0;
+    var debugOn = false;
+    try {
+      var pq = params();
+      debugOn = pq.debug === '1';
+      if (!debugOn && typeof localStorage !== 'undefined' && localStorage.getItem('plazaDebug') === '1') debugOn = true;
+    } catch (eDbg) {}
     function resetInterp() {
       if (snapInterp) snapInterp.reset();
+      smoothX = null;
+      smoothY = null;
     }
     function pushInterp(snap) {
       if (snapInterp && snap) snapInterp.push(snap);
@@ -56,6 +69,73 @@
         if (sInterp) return sInterp;
       }
       return letzterSnap;
+    }
+    function cloneViewAt(view, idx) {
+      var p = [], i, src, o, k;
+      for (i = 0; i < view.p.length; i++) {
+        if (i !== idx) { p.push(view.p[i]); continue; }
+        src = view.p[i]; o = {};
+        for (k in src) if (Object.prototype.hasOwnProperty.call(src, k)) o[k] = src[k];
+        p.push(o);
+      }
+      return {
+        phase: view.phase, countdown: view.countdown, zeit: view.zeit,
+        sieger: view.sieger, endeTimer: view.endeTimer, nachricht: view.nachricht,
+        tick: view.tick, projektil: view.projektil, p: p
+      };
+    }
+    function applyLocalPredict(view) {
+      if (!view || !view.p || !view.p[seite] || !snapInterp || !Plaza.Interp || !netz || netz.istHost() || soloMode) return view;
+      var lead = snapInterp.latest();
+      var leadMe = lead && lead.p && lead.p[seite];
+      if (!leadMe || lead.phase === 'countdown' || lead.phase === 'ende') {
+        smoothX = null; smoothY = null;
+        return view;
+      }
+      var goalX = leadMe.x;
+      var dir = (lokalInput.r ? 1 : 0) - (lokalInput.l ? 1 : 0);
+      var canMove = !leadMe.stun && !leadMe.atk && !leadMe.blk && leadMe.grounded;
+      if (canMove && dir && Plaza.Chars && Plaza.Chars.finde) {
+        var ch = Plaza.Chars.finde(leadMe.charId);
+        var speed = (ch && ch.speed) || 6;
+        if (lokalInput.d || leadMe.crouch) speed *= 0.35;
+        goalX = leadMe.x + dir * speed * 2;
+      }
+      if (smoothX == null) smoothX = view.p[seite].x;
+      if (smoothY == null) smoothY = view.p[seite].y;
+      smoothX = Plaza.Interp.schritt(smoothX, goalX, 40);
+      smoothY = Plaza.Interp.schritt(smoothY, leadMe.y, 40);
+      var copy = cloneViewAt(view, seite);
+      copy.p[seite].x = smoothX;
+      copy.p[seite].y = smoothY;
+      if (canMove && dir) copy.p[seite].facing = dir > 0 ? 1 : -1;
+      return copy;
+    }
+    function noteSieg(snap) {
+      if (!snap || snap.phase !== 'ende' || snap.sieger == null || snap.sieger !== seite) return '';
+      var mark = String(kampfNr) + ':' + snap.sieger;
+      if (siegMark === mark) return Plaza.Muenzen ? (' · ' + Plaza.Muenzen.lesen() + ' Münzen') : '';
+      siegMark = mark;
+      if (!Plaza.Muenzen) return '';
+      var total = Plaza.Muenzen.gutschreiben(Plaza.Muenzen.PRO_SIEG);
+      if (ui && ui.zeigeMuenzen) ui.zeigeMuenzen();
+      return ' · +' + Plaza.Muenzen.PRO_SIEG + ' Münzen (gesamt ' + total + ')';
+    }
+    function drawNetDebug() {
+      if (!debugOn) return;
+      var el = document.getElementById('net-debug');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'net-debug';
+        el.setAttribute('aria-hidden', 'true');
+        el.style.cssText = 'position:fixed;left:4px;bottom:4px;z-index:80;font:11px ui-monospace,monospace;color:#c0ffc0;background:rgba(0,0,0,.55);padding:2px 4px;pointer-events:none';
+        document.body.appendChild(el);
+      }
+      var st = (snapInterp && snapInterp.stats) ? snapInterp.stats() : null;
+      var via = (netz && netz.getTransport) ? netz.getTransport() : '-';
+      el.textContent = st
+        ? ('via ' + via + '  recv ' + st.recvHz + '/s  puffer ' + (Math.round(st.depth * 10) / 10) + '  delay ' + st.delayMs + 'ms  hitch ' + st.underruns)
+        : ('via ' + via);
     }
     var netz = null;
     var lokalInput = { l: false, r: false, u: false, d: false, a: false, b: false, c: false };
@@ -373,7 +453,7 @@
         ui.showScreen('menue');
         ui.setStatus('');
         if (ui.setPauseBtn) ui.setPauseBtn(false);
-        Plaza.Render.menueHint(render, 'Versus · Solo · v4.1');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v4.2');
       },
       onPause: function () {
         if (mode !== 'kampf' && mode !== 'ende') return;
@@ -416,7 +496,7 @@
         ui.showScreen('menue');
         ui.setStatus('Kampf abgebrochen.');
         if (ui.setPauseBtn) ui.setPauseBtn(false);
-        Plaza.Render.menueHint(render, 'Versus · Solo · v4.1');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v4.2');
       },
       onHost: function () {
         soloMode = false;
@@ -500,6 +580,7 @@
       },
       onRematch: function () {
         if (soloMode && kampf) {
+          kampfNr++;
           kampf = Plaza.Kampf.rematch(kampf);
           kampf.phase = 'countdown';
           kampf.countdown = 3;
@@ -511,6 +592,7 @@
           return;
         }
         if (netz && netz.istHost() && kampf) {
+          kampfNr++;
           kampf = Plaza.Kampf.rematch(kampf);
           kampf.phase = 'countdown';
           kampf.countdown = 3;
@@ -531,7 +613,8 @@
           a: !!inp.a, b: !!inp.b, c: !!inp.c
         };
         if (mode === 'kampf' && netz && !netz.istHost() && netz.istBereit()) {
-          netz.sende({ typ: 'input', seite: seite, input: lokalInput });
+          inputSeq++;
+          netz.sende({ typ: 'input', seite: seite, input: lokalInput, seq: inputSeq });
         }
       }
     });
@@ -545,6 +628,7 @@
       var c0 = hostWahl, c1 = gastWahl, nm0 = n0, nm1 = n1;
       applyLevel(currentLevel());
       clearPeerInput();
+      kampfNr++;
       kampf = Plaza.Kampf.neu(c0, c1, nm0, nm1);
       kampf.phase = 'countdown';
       kampf.countdown = 3;
@@ -563,6 +647,7 @@
       var n0 = hostName || Plaza.Chars.finde(hostWahl).name;
       var n1 = gastName || 'CPU';
       applyLevel(ui.getLevel ? ui.getLevel() : currentLevel());
+      kampfNr++;
       kampf = Plaza.Kampf.neu(hostWahl, gastWahl, n0, n1);
       kampf.phase = 'countdown';
       kampf.countdown = 3;
@@ -579,14 +664,20 @@
       ui.setStatus('Testmodus vs CPU — Moves ausprobieren!');
     }
 
-    function broadcast() {
+    function broadcast(force) {
       if (!(netz && netz.istHost() && kampf)) return;
       var snap = Plaza.Kampf.snapshot(kampf);
       letzterSnap = snap;
-      netz.sende({
-        typ: 'state', state: snap, level: currentLevel(),
-        wetter: (Plaza.Render && Plaza.Render.wetterState) ? Plaza.Render.wetterState() : null
-      });
+      var direkt = netz.hatDirekt && netz.hatDirekt();
+      // MQTT-Fallback: jeder zweite Tick. Der Broker klumpt 60 Hz sonst zu Bursts.
+      // Peer-DataChannel trägt jeden Tick. Level/Wetter nicht in jedes Paket.
+      if (!force && !direkt && kampf.phase === 'kampf' && (kampf.tick % 2) !== 0) return;
+      var msg = { typ: 'state', state: snap };
+      if (force || kampf.phase !== 'kampf' || (kampf.tick % 30) === 0) {
+        msg.level = currentLevel();
+        if (Plaza.Render && Plaza.Render.wetterState) msg.wetter = Plaza.Render.wetterState();
+      }
+      netz.sende(msg);
     }
 
     netz = Plaza.Netz.erstelle({
@@ -695,7 +786,11 @@
         if (msg.typ === 'input' && netz.istHost()) {
           // Peer = andere Seite (auch nach Swap: Gast kann seite 0 sein)
           if (typeof msg.seite === 'number' && msg.seite !== seite) {
-            peerInput = msg.input || peerInput;
+            if (typeof msg.seq === 'number' && msg.seq < lastPeerSeq) { /* älteres Input */ }
+            else {
+              if (typeof msg.seq === 'number') lastPeerSeq = msg.seq;
+              peerInput = msg.input || peerInput;
+            }
           }
         }
         if (msg.typ === 'state' && !netz.istHost()) {
@@ -706,6 +801,7 @@
               && st.tick < letzterSnap.tick && st.phase !== 'countdown') {
             /* veraltetes Paket */
           } else {
+            if (st && st.phase === 'countdown' && letzterSnap && letzterSnap.phase === 'ende') kampfNr++;
             if (msg.level) {
               applyLevel(msg.level);
               if (ui.setLevel) ui.setLevel(msg.level);
@@ -749,6 +845,7 @@
           } else {
             mode = 'kampf';
             ui.showScreen('kampf');
+            kampfNr++;
             kampf = Plaza.Kampf.rematch(kampf);
             kampf.phase = 'countdown';
             kampf.countdown = 3;
@@ -805,6 +902,7 @@
       if (Plaza.Sound) Plaza.Sound.resume();
       if (letzterSnap && letzterSnap.phase === 'ende') {
         if (soloMode && kampf) {
+          kampfNr++;
           kampf = Plaza.Kampf.rematch(kampf);
           kampf.phase = 'countdown';
           kampf.countdown = 3;
@@ -812,6 +910,7 @@
           mode = 'kampf';
           ui.showScreen('kampf');
         } else if (netz && netz.istHost() && kampf) {
+          kampfNr++;
           kampf = Plaza.Kampf.rematch(kampf);
           kampf.phase = 'countdown';
           kampf.countdown = 3;
@@ -864,9 +963,10 @@
         if (letzterSnap.phase === 'ende') {
           if (mode !== 'ende') {
             mode = 'ende';
-            var wonS = letzterSnap.sieger === 0;
+            var wonS = letzterSnap.sieger === seite;
+            var coinS = noteSieg(letzterSnap);
             if (ui.setEnde) ui.setEnde(wonS ? 'GEWONNEN!' : (letzterSnap.sieger != null ? 'VERLOREN!' : 'Ende'),
-              (letzterSnap.nachricht || '') + ' (Testmodus)');
+              (letzterSnap.nachricht || '') + ' (Testmodus)' + coinS);
             ui.showScreen('ende');
           }
         } else if (mode === 'ende') {
@@ -890,7 +990,7 @@
             if (phaseVorher !== 'ende' || (kampf.endeTimer % 12) === 0) broadcast();
             phaseVorher = 'ende';
           } else {
-            // v4.1: jeden Sim-Tick (~60 Hz). Gast spielt die Ticks mit festem Takt ab,
+            // v4.2: jeden Sim-Tick (~60 Hz). Gast spielt die Ticks mit festem Takt ab,
             // auch wenn die Pakete im selben Frame gebündelt ankommen.
             broadcast();
           }
@@ -902,7 +1002,8 @@
           if (mode !== 'ende') {
             mode = 'ende';
             var wonH = letzterSnap.sieger === seite;
-            if (ui.setEnde) ui.setEnde(wonH ? 'GEWONNEN!' : (letzterSnap.sieger != null ? 'VERLOREN!' : 'Ende'), letzterSnap.nachricht || '');
+            var coinH = noteSieg(letzterSnap);
+            if (ui.setEnde) ui.setEnde(wonH ? 'GEWONNEN!' : (letzterSnap.sieger != null ? 'VERLOREN!' : 'Ende'), (letzterSnap.nachricht || '') + coinH);
             ui.showScreen('ende');
           }
         } else if (mode === 'ende') {
@@ -915,11 +1016,12 @@
       } else if ((mode === 'kampf' || mode === 'ende') && letzterSnap) {
         // Gast: Input-HB dichter (Paketverlust → sonst sticky keys)
         if (mode === 'kampf' && netz && !netz.istHost() && netz.istBereit()) {
-          // v4.1: jeden Frame — Motion-Inputs (↓↘→) dürfen nicht auf 20 Hz zusammenfallen
-          netz.sende({ typ: 'input', seite: seite, input: lokalInput });
+          // Jeden Frame — Motion-Inputs (↓↘→) dürfen nicht auf 20 Hz zusammenfallen.
+          inputSeq++;
+          netz.sende({ typ: 'input', seite: seite, input: lokalInput, seq: inputSeq });
         }
         var view = (!netz.istHost() && !soloMode && mode === 'kampf')
-          ? (drawSnap(now) || letzterSnap)
+          ? applyLocalPredict(drawSnap(now) || letzterSnap)
           : letzterSnap;
         if (!tabHidden) { Plaza.Render.zeichne(render, view, seite); framesDrawn++; } else { framesSkipped++; }
         if (netDown && Plaza.Render.banner) Plaza.Render.banner(render, 'VERBINDUNG WEG — Nochmal');
@@ -927,7 +1029,8 @@
           if (mode !== 'ende') {
             mode = 'ende';
             var wonC = letzterSnap.sieger === seite;
-            if (ui.setEnde) ui.setEnde(wonC ? 'GEWONNEN!' : (letzterSnap.sieger != null ? 'VERLOREN!' : 'Ende'), letzterSnap.nachricht || '');
+            var coinC = noteSieg(letzterSnap);
+            if (ui.setEnde) ui.setEnde(wonC ? 'GEWONNEN!' : (letzterSnap.sieger != null ? 'VERLOREN!' : 'Ende'), (letzterSnap.nachricht || '') + coinC);
             ui.showScreen('ende');
           }
         } else if (mode === 'ende' && letzterSnap.phase !== 'ende') {
@@ -936,12 +1039,13 @@
         }
         acc = 0;
       } else if (mode === 'menue') {
-        Plaza.Render.menueHint(render, 'Versus · Solo · v4.1');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v4.2');
         acc = 0;
       } else {
         Plaza.Render.menueHint(render, statusElText());
         acc = 0;
       }
+      drawNetDebug();
     }
 
     function statusElText() {
@@ -977,7 +1081,7 @@
     document.addEventListener('webkitfullscreenchange', function () { updateFsButton(); _skKey = ''; skalieren(); });
     skalieren();
     if ('serviceWorker' in navigator) {
-      try { navigator.serviceWorker.register('sw.js?v=4.1'); } catch (eSw) {}
+      try { navigator.serviceWorker.register('sw.js?v=4.2'); } catch (eSw) {}
     }
     requestAnimationFrame(loop);
   }

@@ -1,4 +1,4 @@
-/* Menü, Charakterwahl, Touch-Steuerung. v4.1 — Pause-Taste + Kombi-Hinweis. */
+/* Menü, Charakterwahl, Touch-Steuerung. v4.2 — Pause-Taste + Kombi-Hinweis. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -46,6 +46,15 @@
       if (name === 'ende') overlay.classList.add('ende-mode');
       else overlay.classList.remove('ende-mode');
       setPauseBtn(name === 'kampf' || name === 'pause' || name === 'ende');
+      zeigeMuenzen();
+    }
+    function zeigeMuenzen() {
+      var n = (Plaza.Muenzen && Plaza.Muenzen.lesen) ? Plaza.Muenzen.lesen() : 0;
+      var label = n + (n === 1 ? ' Münze' : ' Münzen');
+      var a = overlay.querySelector('#muenzen-anzeige');
+      var b = overlay.querySelector('#ende-muenzen');
+      if (a) a.textContent = label;
+      if (b) b.textContent = label;
     }
     function setPauseBtn(on) {
       var b = root.querySelector('#btn-pause');
@@ -311,6 +320,7 @@
       if (code) code.textContent = raum || '';
     }
 
+    zeigeMuenzen();
     bindTouch();
     bindKeys();
     bindMenue();
@@ -338,6 +348,7 @@
     return {
       showScreen: showScreen,
       setEnde: setEnde,
+      zeigeMuenzen: zeigeMuenzen,
       setSeiteHint: function (seite) {
         var el = overlay.querySelector('#seite-hint');
         if (!el) return;

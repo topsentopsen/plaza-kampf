@@ -1,9 +1,10 @@
-/* Client-Snapshot-Interpolation v4.1 — keine Einzelframe-Sprünge.
-   v4.0 spielte schon im Sim-Takt, warf den Playhead aber bei einem tiefen Puffer
-   in einem Frame nach vorn (Burst) und extrapolierte bei Unterlauf mit vx über
-   das letzte Snapshot hinaus (ein Frame zu weit, danach zurück). Pose/Facing/Atk
-   sprangen außerdem bei t=0.5 mitten im Intervall. Jetzt: Playhead nur stetig,
-   bei Unterlauf stehenbleiben, Diskretes erst am Tick-Rand, veraltete Ticks verwerfen. */
+/* Client-Snapshot-Interpolation v4.2 — flüssig trotz MQTT-Bursts.
+   v4.1 hat Einzelframe-Teleports entfernt, den Puffer aber auf 50 ms gelassen und
+   bei Unterlauf eingefroren. Öffentliche MQTT-Broker liefern 60-Hz-Snapshots in
+   Klumpen (oft 80–150 ms). Der Gast stand deshalb ständig und holte danach nur
+   kriechend auf — das hakelige Bild. Jetzt folgt die Verzögerung der gemessenen
+   Burst-Lücke, die Geschwindigkeit bleibt nahe 1×, Pose wechselt weiter erst am
+   Tick-Rand, und es gibt keinen vx-Vorlauf über das letzte Snapshot hinaus. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza || (g.Plaza = {});
@@ -45,6 +46,30 @@
     return best;
   }
 
+  function smoothAxis(p0, p1, v0, v1, t, span) {
+    if (!(span > 0) || span > 4) return lerp(p0, p1, t);
+    var tt = t * t, ttt = tt * t;
+    var h00 = 2 * ttt - 3 * tt + 1;
+    var h10 = ttt - 2 * tt + t;
+    var h01 = -2 * ttt + 3 * tt;
+    var h11 = ttt - tt;
+    var h = h00 * p0 + h10 * (v0 * span) + h01 * p1 + h11 * (v1 * span);
+    var lo = Math.min(p0, p1) - 6;
+    var hi = Math.max(p0, p1) + 6;
+    if (h < lo) return lo;
+    if (h > hi) return hi;
+    return h;
+  }
+
+  /** Ein Frame darf höchstens maxStep auf das Ziel zugehen — kein Teleport. */
+  function schritt(current, goal, maxStep) {
+    if (current == null || current !== current) return goal;
+    var d = goal - current;
+    if (d > maxStep) d = maxStep;
+    if (d < -maxStep) d = -maxStep;
+    return current + d;
+  }
+
   function lerpSnap(a, b, t) {
     if (!a) return b;
     if (!b) return a;
@@ -66,10 +91,11 @@
           af = lerp(ap.atk.frame || ap.af || 0, bp.atk.frame || bp.af || 0, t);
           atk = { art: ap.atk.art, frame: af };
         }
+        var span = (typeof b.tick === 'number' && typeof a.tick === 'number') ? (b.tick - a.tick) : 1;
         return {
           id: bp.id, charId: bp.charId, name: bp.name,
-          x: lerp(ap.x, bp.x, t),
-          y: lerp(ap.y, bp.y, t),
+          x: smoothAxis(ap.x, bp.x, ap.vx || 0, bp.vx || 0, t, span),
+          y: smoothAxis(ap.y, bp.y, ap.vy || 0, bp.vy || 0, t, span),
           facing: disc.facing,
           grounded: disc.grounded,
           hp: disc.hp, maxHp: disc.maxHp, stun: disc.stun,
@@ -146,28 +172,54 @@
   }
 
   /**
-   * delayMs: wie weit die gezeichnete Sim-Zeit hinter dem neuesten Tick liegt.
-   * 50 ms ≈ 3 Ticks — genug, um ein gebündeltes Paket zu entzerren, ohne den Gast träge zu machen.
+   * delayMs startet bei ~90 ms und folgt der Lücke zwischen Snapshot-Klumpen
+   * (Untergrenze 60 ms, Obergrenze 150 ms). So reicht der Puffer für einen
+   * MQTT-Burst, ohne den Gast eine halbe Sekunde hinterherlaufen zu lassen.
    */
   function erstelle(opts) {
     opts = opts || {};
-    var delayMs = opts.delayMs != null ? opts.delayMs : 50;
+    var delayMs = opts.delayMs != null ? opts.delayMs : 90;
     var buf = [];
     var playTick = null;
     var lastT = null;
-    var MAX = 24;
+    var lastBurstAt = null;
+    var emaGap = 100;
+    var holding = false;
+    var arrivals = [];
+    var pushed = 0;
+    var underruns = 0;
+    var MAX = 48;
 
     function now() {
       return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
     }
 
     function delayTicks() {
-      return Math.max(1, delayMs * (60 / 1000));
+      return Math.max(2, delayMs * (60 / 1000));
+    }
+
+    function noteArrival(t) {
+      pushed++;
+      arrivals.push(t);
+      var cut = t - 1000;
+      while (arrivals.length && arrivals[0] < cut) arrivals.shift();
+      if (lastBurstAt == null) { lastBurstAt = t; return; }
+      var gap = t - lastBurstAt;
+      lastBurstAt = t;
+      if (gap < 12 || gap > 500) return;
+      emaGap = emaGap * 0.72 + gap * 0.28;
+      if (emaGap < 45) emaGap = 45;
+      if (emaGap > 180) emaGap = 180;
+      var want = Math.round(emaGap * 1.1);
+      if (want < 70) want = 70;
+      if (want > 150) want = 150;
+      if (want >= delayMs) delayMs = want;
+      else delayMs = delayMs * 0.85 + want * 0.15;
+      if (delayMs < 60) delayMs = 60;
+      if (delayMs > 150) delayMs = 150;
     }
 
     function trim() {
-      // Nur Frames hinter dem Playhead wegwerfen. Ein Burst bleibt liegen,
-      // sonst springt die Figur in einem Frame auf den neuesten Tick.
       var guard = playTick == null ? -1e9 : playTick - 1;
       while (buf.length > MAX && buf[0].tick < guard) buf.shift();
     }
@@ -178,12 +230,12 @@
       if (buf.length) {
         var last = buf[buf.length - 1];
         if (typeof snap.tick === 'number' && typeof last.tick === 'number' && snap.tick < last.tick) {
-          // Nur ein echter Rematch (Countdown) leert den Puffer.
-          // Veraltete / out-of-order Ticks im laufenden Kampf verwerfen — nicht eine Frame lang anzeigen.
           if (snap.phase === 'countdown') {
             buf = [];
             playTick = null;
             lastT = null;
+            lastBurstAt = null;
+            holding = false;
           } else {
             return;
           }
@@ -191,6 +243,7 @@
       }
       if (buf.length && buf[buf.length - 1].tick === snap.tick) buf[buf.length - 1] = snap;
       else buf.push(snap);
+      noteArrival(t);
       trim();
       if (lastT == null) lastT = t;
       if (playTick == null) playTick = snap.tick - delayTicks();
@@ -200,6 +253,8 @@
       buf = [];
       playTick = null;
       lastT = null;
+      lastBurstAt = null;
+      holding = false;
     }
 
     function latest() {
@@ -210,7 +265,7 @@
       if (lastT == null) { lastT = t; return 0; }
       var dt = t - lastT;
       if (dt < 0) dt = 0;
-      if (dt > 50) dt = 50;
+      if (dt > 80) dt = 80;
       lastT = t;
       return dt;
     }
@@ -221,7 +276,6 @@
       var latestSnap = buf[buf.length - 1];
       var dt = takeDt(t);
       if (latestSnap.phase === 'ende' || latestSnap.phase === 'countdown') {
-        // Zahl sofort zeigen, Uhr aber hinter dem Tick lassen (Kampf startet mit Puffer, nicht am Rand).
         playTick = latestSnap.tick - delayTicks();
         return latestSnap;
       }
@@ -229,14 +283,23 @@
 
       var newest = latestSnap.tick;
       var want = delayTicks();
-      // dt ist oben auf 50 ms gedeckelt (~3 Ticks). Kein zusätzlicher Hard-Snap:
-      // ein tiefer Puffer holt nur Bruchteile eines Ticks auf, nie in einem Frame zum Ziel.
-      var step = dt * (60 / 1000);
-      playTick += step;
       var depth = newest - playTick;
-      if (depth > want + 2) playTick += Math.min(0.35, depth - want);
-      // Unterlauf: stehenbleiben. Nicht mit vx über das letzte Snapshot hinausschießen.
-      if (playTick > newest) playTick = newest;
+      var speed = 1;
+      if (depth > want + 3) speed = 1.08;
+      else if (depth < want * 0.45) speed = 0.92;
+      var step = dt * (60 / 1000) * speed;
+      if (step > 3.2) step = 3.2;
+      playTick += step;
+      if (playTick > newest) {
+        if (!holding && step > 0.2) {
+          underruns++;
+          if (delayMs < 150) delayMs = Math.min(150, delayMs + 8);
+        }
+        holding = true;
+        playTick = newest;
+      } else if (newest - playTick > 0.8) {
+        holding = false;
+      }
       if (playTick < buf[0].tick) {
         var hole = buf[0].tick - playTick;
         playTick += hole > 2 ? 1 : hole;
@@ -258,11 +321,24 @@
       return lerpSnap(older, newer, clamp01(alpha));
     }
 
+    function stats() {
+      var newest = buf.length ? buf[buf.length - 1].tick : 0;
+      return {
+        pushed: pushed,
+        underruns: underruns,
+        delayMs: Math.round(delayMs),
+        depth: playTick == null ? 0 : (newest - playTick),
+        burstGapMs: Math.round(emaGap),
+        recvHz: arrivals.length
+      };
+    }
+
     return {
       push: push,
       sample: sample,
       reset: reset,
       latest: latest,
+      stats: stats,
       setDelay: function (ms) { delayMs = ms; }
     };
   }
@@ -270,6 +346,7 @@
   Plaza.Interp = {
     erstelle: erstelle,
     lerpSnap: lerpSnap,
-    extrapolate: extrapolate
+    extrapolate: extrapolate,
+    schritt: schritt
   };
 })(typeof window !== 'undefined' ? window : globalThis);

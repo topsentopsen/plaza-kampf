@@ -1,4 +1,4 @@
-/* Autoritative Kampfsimulation (Host). v4.1: feste Motion-Specials, Backwalk bleibt.
+/* Autoritative Kampfsimulation (Host). v4.2: feste Motion-Specials, Backwalk bleibt.
    Kombis liest nur der Host aus dem Input-Strom (l/r/u/d/a/b/c). Kein Client-Flag „special“. */
 (function (g) {
   'use strict';
