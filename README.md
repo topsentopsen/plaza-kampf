@@ -1,9 +1,9 @@
-## v2.9 Parallax
+## v3.0 Parallax
 
 Mehrschichtiges dynamisches Parallax: stärkere Kamera beim Laufen, Ebenen-Drift, Heat-Shimmer und Asche-Schleier. Theme bleibt Hölle.
 
 
-# Plaza-Kampf v2.9 — Parallax
+# Plaza-Kampf v3.0 — Parallax
 
 Dunkles Versus — *la Pelea del Infierno*. Feuer, Vulkane, ernste Street-Fighter-Chars. Statisches HTML/JS auf GitHub Pages.
 
@@ -114,9 +114,9 @@ Live: https://topsentopsen.github.io/plaza-kampf/
 - Cache: `?v=1.2`
 
 
-## v2.9 „Allein üben“
+## v3.0 „Allein üben“
 - Testmodus ohne zweites Handy: Menü → **Allein üben**
 - Lokaler Kampf gegen einfache CPU (Dummy-Anteile: Block/Abstand)
 - Charakterwahl + Name wie online; Rematch & Menü am Ende
 - Online-Versus unverändert
-- Cache: `?v=2.9`
+- Cache: `?v=3.0`

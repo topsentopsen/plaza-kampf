@@ -1,4 +1,4 @@
-/* Pixel-Canvas v2.9: Parallax dynamisch (Drift/Heat/stärkere Kamera), Basis v1.8 Hölle 1280×768. */
+/* Pixel-Canvas v3.0: Wetter (Regen/Blitz/Sonne) + Parallax v2.9, Hölle 1280×768. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -765,6 +765,95 @@
     hitSeqAlt = neu;
   }
 
+
+  /* ---- Wetter v3.0: klar → regen → gewitter → sonne (zyklisch, performant) ---- */
+  var WETTER_PHASEN = ['klar', 'regen', 'gewitter', 'sonne'];
+  var wetter = { typ: 'klar', next: 900, blend: 0, blitz: 0, wind: 1 };
+  function wetterTick(tick) {
+    if (tick >= wetter.next) {
+      var i = WETTER_PHASEN.indexOf(wetter.typ);
+      wetter.typ = WETTER_PHASEN[(i + 1) % WETTER_PHASEN.length];
+      // 18–40 s bei 60 Hz
+      wetter.next = tick + 1080 + ((tick * 17) % 1320);
+      wetter.blend = 0;
+    }
+    if (wetter.blend < 1) wetter.blend = Math.min(1, wetter.blend + 0.02);
+    if (wetter.typ === 'gewitter') {
+      // seltener Blitz
+      if (wetter.blitz > 0) wetter.blitz--;
+      else if (((tick * 13) % 97) === 0) wetter.blitz = 8 + (tick % 5);
+    } else wetter.blitz = 0;
+    wetter.wind = 0.6 + 0.5 * Math.sin(tick / 90);
+  }
+  function drawWetter(ctx, tick) {
+    var t = wetter.typ, a = wetter.blend, i, x, y, len;
+    if (t === 'regen' || t === 'gewitter') {
+      ctx.fillStyle = t === 'gewitter' ? 'rgba(20,30,50,' + (0.18 * a).toFixed(3) + ')' : 'rgba(30,40,60,' + (0.12 * a).toFixed(3) + ')';
+      ctx.fillRect(0, 0, W, H);
+      var n = t === 'gewitter' ? 70 : 48;
+      var wind = wetter.wind * 10;
+      for (i = 0; i < n; i++) {
+        x = ((i * 89 + tick * (4 + (i % 3))) + wind * 8) % (W + 40) - 20;
+        y = ((i * 53 + tick * (14 + (i % 5))) % (H + 60)) - 30;
+        len = 10 + (i % 5) * 3;
+        ctx.strokeStyle = t === 'gewitter' ? 'rgba(180,200,255,' + (0.35 * a).toFixed(2) + ')' : 'rgba(160,180,220,' + (0.28 * a).toFixed(2) + ')';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + wind, y + len);
+        ctx.stroke();
+      }
+    }
+    if (t === 'gewitter' && wetter.blitz > 0) {
+      var flash = wetter.blitz > 5 ? 0.55 : 0.22;
+      ctx.fillStyle = 'rgba(220,230,255,' + flash.toFixed(2) + ')';
+      ctx.fillRect(0, 0, W, H);
+      // Blitz-Zacken
+      var bx = 200 + ((tick * 7) % 880);
+      ctx.strokeStyle = 'rgba(255,255,240,0.95)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(bx, 0);
+      ctx.lineTo(bx + 30, 140);
+      ctx.lineTo(bx - 20, 160);
+      ctx.lineTo(bx + 40, 320);
+      ctx.lineTo(bx - 10, 340);
+      ctx.lineTo(bx + 25, 520);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(180,200,255,0.5)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(bx + 8, 0);
+      ctx.lineTo(bx + 38, 150);
+      ctx.lineTo(bx - 8, 180);
+      ctx.stroke();
+    }
+    if (t === 'sonne') {
+      // warme Sonne / Godrays trotz Hölle
+      var gx = 960, gy = 120;
+      ctx.fillStyle = 'rgba(255,200,80,' + (0.10 * a).toFixed(3) + ')';
+      ctx.beginPath(); ctx.arc(gx, gy, 90 + Math.sin(tick / 20) * 6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,230,140,' + (0.16 * a).toFixed(3) + ')';
+      ctx.beginPath(); ctx.arc(gx, gy, 40, 0, Math.PI * 2); ctx.fill();
+      for (i = 0; i < 7; i++) {
+        var ang = -0.9 + i * 0.28 + Math.sin(tick / 40 + i) * 0.03;
+        ctx.fillStyle = 'rgba(255,180,60,' + (0.045 * a).toFixed(3) + ')';
+        ctx.beginPath();
+        ctx.moveTo(gx, gy);
+        ctx.lineTo(gx + Math.cos(ang) * 900, gy + Math.sin(ang) * 900);
+        ctx.lineTo(gx + Math.cos(ang + 0.08) * 900, gy + Math.sin(ang + 0.08) * 900);
+        ctx.closePath();
+        ctx.fill();
+      }
+      // leichter Warmton über der Arena
+      ctx.fillStyle = 'rgba(255,140,40,' + (0.05 * a).toFixed(3) + ')';
+      ctx.fillRect(0, 0, W, H);
+    }
+    if (t === 'klar' && a < 1) {
+      // sanfter Übergang zurück
+    }
+  }
+
   function arena(ctx, tick, snap) {
     if (!layers) layers = backeLayers();
     var G = P().glut || GLUT_DEF, o, i, f;
@@ -777,6 +866,7 @@
       publikumHit(snap);
     }
     if (hopT > 0) hopT--;
+    wetterTick(tick);
 
     // L0 + Blutmond-Puls
     drawLayer(ctx, layers.L0, PAR.L0, tick, 'L0');
@@ -2837,6 +2927,7 @@
     for (i = 0; i < snap.p.length; i++) nametag(ctx, snap.p[i]);
     drawFx(ctx);
     fg(ctx, snap.tick || 0);
+    drawWetter(ctx, snap.tick || 0);
     hud(ctx, snap, ich);
     ctx.restore();
   }
@@ -2847,8 +2938,10 @@
     if (!layers) layers = backeLayers();
     // Zeige Arena auch im Menü
     camX = Math.sin(Date.now() / 2800) * 48;
-    arena(ctx, (Date.now() / 50) | 0, null);
-    fg(ctx, 0);
+    var mt = (Date.now() / 50) | 0;
+    arena(ctx, mt, null);
+    fg(ctx, mt);
+    drawWetter(ctx, mt);
     ctx.fillStyle = 'rgba(0,0,0,0.72)';
     ctx.fillRect(0, 0, W, 140);
     // v1.8: Titel mit Kontur + Verlauf (gebacken), Hinweis-Kapsel mit Akzentkanten
@@ -2966,8 +3059,10 @@
   }
 
   Plaza.Render = {
-    W: W, H: H, puffer: function () { return BUF; },
+    W: W, H: H,
+    puffer: function () { return BUF; },
     erstelle: erstelle, setzePuffer: setzePuffer,
-    zeichne: zeichne, menueHint: menueHint, banner: banner, portrait: portrait, resetFx: resetFx
+    zeichne: zeichne, menueHint: menueHint, banner: banner, portrait: portrait, resetFx: resetFx,
+    wetterState: function () { return { typ: wetter.typ, blitz: wetter.blitz, next: wetter.next }; }
   };
 })(typeof window !== 'undefined' ? window : globalThis);
