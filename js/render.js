@@ -1,4 +1,4 @@
-/* Pixel-Canvas v3.5: QA Input-HB / Touch (Arena unverändert). */
+/* Pixel-Canvas v3.6: iOS/PWA (Arena unverändert). */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};

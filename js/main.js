@@ -1,8 +1,8 @@
-/* Einstieg, Spielschleife, Host/Client-Logik. v3.5 — QA: Level-Rebroadcast, Input-HB, Touch. */
+/* Einstieg, Spielschleife, Host/Client-Logik. v3.6 — iOS Safari-Chrome / PWA. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION = 'v3.5';
+  var VERSION = 'v3.6';
   Plaza.VERSION = VERSION;
   function sanitizeName(n) {
     n = String(n == null ? '' : n).replace(/[\u0000-\u001f<>]/g, '').trim();
@@ -97,15 +97,49 @@
       } catch (e0) {}
       try { window.scrollTo(0, 0); } catch (e1) {}
     }
+    function istPwaStandalone() {
+      try {
+        if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return true;
+        if (window.matchMedia && window.matchMedia('(display-mode: fullscreen)').matches) return true;
+      } catch (e0) {}
+      try { if (navigator.standalone === true) return true; } catch (e1) {}
+      return false;
+    }
+    function markIosMode() {
+      var pwa = istPwaStandalone();
+      document.body.classList.toggle('pwa-standalone', pwa);
+      document.body.classList.toggle('ios-safari-tab', istIOS() && !pwa);
+      return pwa;
+    }
     function hideSafariChrome() {
-      // Klassiker + visualViewport: Leiste nach Drehen klein halten soweit möglich
+      // iOS Safari-Tab: Adressleiste lässt sich nicht dauerhaft entfernen — nur einklappen.
+      // PWA/Home-Screen: nichts nötig.
+      if (istPwaStandalone()) return;
+      var wasLock = document.documentElement.classList.contains('scroll-lock');
+      try {
+        document.documentElement.classList.add('ios-chrome-dismiss');
+        if (wasLock) document.documentElement.classList.remove('scroll-lock');
+      } catch (eA) {}
       try { window.scrollTo(0, 0); } catch (e0) {}
       try { window.scrollTo(0, 1); } catch (e1) {}
-      setTimeout(function () { try { window.scrollTo(0, 0); } catch (e2) {} }, 50);
-      setTimeout(function () { try { window.scrollTo(0, 0); } catch (e3) {} }, 300);
+      try {
+        if (window.visualViewport && window.visualViewport.offsetTop > 0) {
+          window.scrollTo(0, window.visualViewport.offsetTop + 1);
+        }
+      } catch (eVv) {}
+      setTimeout(function () {
+        try { window.scrollTo(0, 0); } catch (e2) {}
+      }, 50);
+      setTimeout(function () {
+        try { window.scrollTo(0, 0); } catch (e3) {}
+        try {
+          document.documentElement.classList.remove('ios-chrome-dismiss');
+          if (wasLock) document.documentElement.classList.add('scroll-lock');
+        } catch (eB) {}
+      }, 320);
     }
     function showIosHintIfNeeded() {
-      if (!istIOS() || kannFullscreen()) return;
+      if (!istIOS() || istPwaStandalone()) return;
       try { if (localStorage.getItem('plaza.iosHint') === '1') return; } catch (e0) {}
       var h = document.getElementById('ios-hint');
       if (h) h.classList.add('show');
@@ -140,11 +174,13 @@
       setTimeout(function () { updateFsButton(); _skKey = ''; skalieren(); }, 200);
     }
     function tryFullscreen() {
+      markIosMode();
       var land = istLandscape();
       document.body.classList.toggle('landscape', land);
       document.body.classList.toggle('landscape-kampf', land && mode === 'kampf');
-      scrollLock(land || mode === 'kampf');
-      if (land) hideSafariChrome();
+      // PWA: immer locken; Safari-Tab: lock nach Chrome-Dismiss
+      scrollLock(land || mode === 'kampf' || istPwaStandalone());
+      if (land && !istPwaStandalone()) hideSafariChrome();
       updateFsButton();
       // Nach Orientierungswechsel FS-Button pulsen; API nur nach Geste
       if (land && mode === 'kampf' && !istFullscreen()) {
@@ -153,8 +189,13 @@
     }
     function skalieren() {
       var vv = window.visualViewport;
+      // iOS Safari: visualViewport.height = sichtbare Fläche unter der Adressleiste
       var ww = (vv && vv.width) || window.innerWidth;
       var wh = (vv && vv.height) || window.innerHeight;
+      if (istIOS() && !istPwaStandalone() && vv && vv.height > 0) {
+        wh = vv.height;
+        ww = vv.width || ww;
+      }
       var W = Plaza.Render.W, H = Plaza.Render.H;
       var dpr = Math.min(window.devicePixelRatio || 1, 3);
       var land = istLandscape();
@@ -281,7 +322,7 @@
         mode = 'menue';
         ui.showScreen('menue');
         ui.setStatus('');
-        Plaza.Render.menueHint(render, 'Versus · Solo · v3.5');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v3.6');
       },
       onHost: function () {
         soloMode = false;
@@ -645,6 +686,11 @@
       Plaza.Render.menueHint(render, 'Raum erstellen oder beitreten');
     }
 
+    markIosMode();
+    if (istIOS() && !istPwaStandalone()) {
+      // Einmalig Hinweis, dass nur Home-Bildschirm die Leiste wirklich entfernt
+      setTimeout(showIosHintIfNeeded, 900);
+    }
     document.addEventListener('pointerdown', function () {
       if (Plaza.Sound) { Plaza.Sound.resume(); Plaza.Sound.init(); }
       hideSafariChrome();
@@ -777,7 +823,7 @@
         }
         acc = 0;
       } else if (mode === 'menue') {
-        Plaza.Render.menueHint(render, 'Versus · Solo · v3.5');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v3.6');
         acc = 0;
       } else {
         Plaza.Render.menueHint(render, statusElText());

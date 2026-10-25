@@ -15,4 +15,11 @@ assert.ok(ui.indexOf('setPointerCapture') !== -1, 'pointer capture');
 assert.ok(ui.indexOf('lostpointercapture') !== -1, 'lostpointercapture');
 assert.ok(ui.indexOf('hasPointerCapture') !== -1, 'leave gated by capture');
 assert.ok(man.indexOf('display') !== -1);
-console.log('ok — mobile-touch.test.js');
+
+var main = fs.readFileSync(path.join(root, 'js/main.js'), 'utf8');
+assert.ok(main.indexOf('istPwaStandalone') !== -1, 'PWA detect');
+assert.ok(main.indexOf('ios-chrome-dismiss') !== -1 || html.indexOf('ios-chrome-dismiss') !== -1, 'chrome dismiss');
+assert.ok(html.indexOf('interactive-widget=resizes-content') !== -1, 'interactive-widget');
+assert.ok(man.indexOf('"display": "standalone"') !== -1 || man.indexOf('"display":"standalone"') !== -1);
+assert.ok(man.indexOf('?v=3.6') !== -1, 'manifest start_url version');
+console.log('ok — mobile-touch.test.js (+ios v3.6)');

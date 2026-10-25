@@ -1,12 +1,24 @@
-## v3.5 QA Swap-Input / Endscreen
+## v3.6 iOS Safari-Chrome / PWA
 
-Seite tauschen: Char-Slots + Peer-Input korrekt; Host-Endscreen „Gewonnen/Verloren“ nach eigener Seite; Rematch FX-Reset; Gast-Endscreen ohne Flackern.
+Safari-Tab: Adressleiste lässt sich unter iOS **nicht dauerhaft** ausblenden (System-Limit). Verbesserter Einklapp-Versuch + visualViewport-Layout. **Zum Home-Bildschirm** (PWA standalone) = ohne Browser-UI. Manifest `start_url` ?v=3.6.
+
+Live: https://topsentopsen.github.io/plaza-kampf/?v=3.6
+
+## v3.5 QA Level-Rebroadcast + Input-HB + Touch
+
+Host sendet Level/Wetter erneut bei Arena-Wechsel nach Join. Gast-Input alle 6 Frames. Touch: leave ignorieren bei Pointer-Capture.
 
 Live: https://topsentopsen.github.io/plaza-kampf/?v=3.5
 
+## v3.4 QA Swap-Input / Endscreen
+
+Seite tauschen: Char-Slots + Peer-Input korrekt; Host-Endscreen nach eigener Seite; Rematch FX-Reset; Gast-Endscreen ohne Flackern.
+
+Live: https://topsentopsen.github.io/plaza-kampf/?v=3.4
+
 ## v3.3 QA Level-FX + Wetter-Sync
 
-Höllen-Overlays (Neon/Brunnen/Fackeln) nur in Hölle; Ambient pro Arena. Wetter-State im Netz-Sync.
+Höllen-Overlays nur in Hölle; Ambient pro Arena; Wetter Host→Gast Sync.
 
 Live: https://topsentopsen.github.io/plaza-kampf/?v=3.3
 

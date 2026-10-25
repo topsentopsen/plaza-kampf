@@ -1,5 +1,5 @@
-/* Plaza-Kampf SW v3.5 */
-var CACHE = 'plaza-kampf-v3.5';
+/* Plaza-Kampf SW v3.6 */
+var CACHE = 'plaza-kampf-v3.6';
 var ASSETS = [
   './',
   './index.html',
@@ -7,16 +7,16 @@ var ASSETS = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',
-  './js/palette.js?v=3.5',
-  './js/chars.js?v=3.5',
-  './js/kampf.js?v=3.5',
-  './js/netz.js?v=3.5',
-  './js/sound.js?v=3.5',
-  './js/levels.js?v=3.5',
-  './js/render.js?v=3.5',
-  './js/ki.js?v=3.5',
-  './js/ui.js?v=3.5',
-  './js/main.js?v=3.5'
+  './js/palette.js?v=3.6',
+  './js/chars.js?v=3.6',
+  './js/kampf.js?v=3.6',
+  './js/netz.js?v=3.6',
+  './js/sound.js?v=3.6',
+  './js/levels.js?v=3.6',
+  './js/render.js?v=3.6',
+  './js/ki.js?v=3.6',
+  './js/ui.js?v=3.6',
+  './js/main.js?v=3.6'
 ];
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(ASSETS); }).then(function () { return self.skipWaiting(); }));
