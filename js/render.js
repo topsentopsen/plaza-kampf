@@ -1,4 +1,4 @@
-/* Pixel-Canvas v3.0: Wetter (Regen/Blitz/Sonne) + Parallax v2.9, Hölle 1280×768. */
+/* Pixel-Canvas v3.1: Level-System (Hölle/Dschungel/Brücke/Stadt) + Wetter + Parallax. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -14,6 +14,7 @@
   var prevSnap = null;
   var camX = 0;
   var shake = 0;
+  var levelId = 'hoelle';
 
   /* ==== v1.6 Arena — Drop-in für js/render.js ====
    * Ersetzt in render.js den Block von `function P()` (Z. 18) bis direkt vor
@@ -182,7 +183,7 @@
     return { R: R, pat: pat, ell: ell, ellPfad: ellPfad, poly: poly, kpoly: kpoly, kR: kR, linie: linie, toene: toene, x: x };
   }
 
-  function backeLayers() {
+  function bakeHoelle() {
     var pal = P();
     var G = pal.glut || GLUT_DEF;
 
@@ -692,6 +693,35 @@
     return { L0: L0, L1: L1, L2: L2, L3: L3, L4: L4, L5: L5, lw: LW,
       L4r: L4r, L5f: L5f, daemon: [daemon(false), daemon(true)], kegel: kegel };
   }
+
+  function levelApi() {
+    return { backe: backe, werkzeug: werkzeug, rng: rng, LW: LW, H: H, P: P, GLUT_DEF: GLUT_DEF };
+  }
+  function backeLayers() {
+    var extra = Plaza.Levels && Plaza.Levels.bake ? Plaza.Levels.bake(levelId, levelApi()) : null;
+    if (extra) return extra;
+    return bakeHoelle();
+  }
+  function setLevel(id) {
+    if (!id) return levelId;
+    var ok = false;
+    if (Plaza.Levels && Plaza.Levels.LISTE) {
+      for (var i = 0; i < Plaza.Levels.LISTE.length; i++) if (Plaza.Levels.LISTE[i].id === id) ok = true;
+    }
+    if (!ok && id !== 'hoelle') return levelId;
+    if (id === levelId && layers) return levelId;
+    levelId = id;
+    layers = null;
+    // Wetter-Bias beim Levelwechsel
+    if (typeof wetter !== 'undefined' && Plaza.Levels && Plaza.Levels.weatherBias) {
+      wetter.typ = Plaza.Levels.weatherBias(id) || 'klar';
+      wetter.blend = 0;
+      wetter.next = (wetter.next || 0);
+    }
+    return levelId;
+  }
+  function getLevel() { return levelId; }
+
 
   function driftOf(key, tick) {
     if (key == null || tick == null || !DRIFT[key]) return 0;
@@ -2947,7 +2977,8 @@
     // v1.8: Titel mit Kontur + Verlauf (gebacken), Hinweis-Kapsel mit Akzentkanten
     ctx.fillStyle = '#ff3a08'; ctx.fillRect(0, 140, W, 2);
     text(ctx, 'Plaza-Kampf', 60, true, ['#fff0c0', '#e8a060'], '#000', W >> 1, 76, 'center');
-    text(ctx, 'la Pelea del Infierno', 32, false, '#ff6020', '#000', W >> 1, 122, 'center');
+    var ln = (Plaza.Levels && Plaza.Levels.LISTE || []).filter(function (L) { return L.id === levelId; })[0];
+    text(ctx, (ln ? (ln.emoji + ' ' + ln.name + ' · ') : '') + 'la Pelea del Infierno', 28, false, '#ff6020', '#000', W >> 1, 122, 'center');
     ctx.fillStyle = '#000'; ctx.fillRect(156, (H >> 1) - 60, W - 312, 104);
     ctx.fillStyle = 'rgba(20,6,6,0.9)'; ctx.fillRect(160, (H >> 1) - 56, W - 320, 96);
     ctx.fillStyle = '#ff6020'; ctx.fillRect(160, (H >> 1) - 56, W - 320, 2); ctx.fillRect(160, (H >> 1) + 38, W - 320, 2);
@@ -3063,6 +3094,8 @@
     puffer: function () { return BUF; },
     erstelle: erstelle, setzePuffer: setzePuffer,
     zeichne: zeichne, menueHint: menueHint, banner: banner, portrait: portrait, resetFx: resetFx,
-    wetterState: function () { return { typ: wetter.typ, blitz: wetter.blitz, next: wetter.next }; }
+    wetterState: function () { return { typ: wetter.typ, blitz: wetter.blitz, next: wetter.next }; },
+    setLevel: setLevel, getLevel: getLevel,
+    levels: function () { return (Plaza.Levels && Plaza.Levels.LISTE) || [{ id: 'hoelle', name: 'Hölle' }]; }
   };
 })(typeof window !== 'undefined' ? window : globalThis);

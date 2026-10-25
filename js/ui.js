@@ -1,4 +1,4 @@
-/* Menü, Charakterwahl, Touch-Steuerung. v1.3 */
+/* Menü, Charakterwahl, Touch-Steuerung. v3.1 — Level-Picker */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -17,7 +17,9 @@
     var onSwap = opts.onSwap || function () {};
     var onSolo = opts.onSolo || function () {};
     var onMenue = opts.onMenue || function () {};
+    var onLevel = opts.onLevel || function () {};
     var getLink = opts.getLink || function () { return ''; };
+    var selectedLevel = 'hoelle';
 
     var overlay = root.querySelector('#overlay');
     var controls = root.querySelector('#controls');
@@ -47,6 +49,34 @@
       var pEl = overlay.querySelector('#ende-text');
       if (tEl) tEl.textContent = titel || 'Ende';
       if (pEl) pEl.textContent = text || '';
+    }
+
+
+    function fillLevels(selId) {
+      var box = overlay.querySelector('#level-pick');
+      if (!box) return;
+      var liste = (Plaza.Render && Plaza.Render.levels) ? Plaza.Render.levels()
+        : ((Plaza.Levels && Plaza.Levels.LISTE) || [{ id: 'hoelle', name: 'Hölle', emoji: '🌋', desc: '' }]);
+      if (selId) selectedLevel = selId;
+      box.innerHTML = '';
+      liste.forEach(function (L) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'level-card';
+        b.dataset.level = L.id;
+        b.innerHTML = '<strong>' + (L.emoji || '') + ' ' + L.name + '</strong><small>' + (L.desc || '') + '</small>';
+        if (L.id === selectedLevel) b.classList.add('aktiv');
+        b.addEventListener('click', function () {
+          selectedLevel = L.id;
+          var alle = box.querySelectorAll('.level-card');
+          for (var i = 0; i < alle.length; i++) alle[i].classList.remove('aktiv');
+          b.classList.add('aktiv');
+          if (Plaza.Sound) Plaza.Sound.sfx('ui');
+          if (Plaza.Render && Plaza.Render.setLevel) Plaza.Render.setLevel(L.id);
+          onLevel(L.id);
+        });
+        box.appendChild(b);
+      });
     }
 
     function fillChars(selId) {
@@ -160,6 +190,7 @@
     }
 
     function bindMenue() {
+      fillLevels(selectedLevel);
       var hostBtn = overlay.querySelector('[data-act="host"]');
       var joinBtn = overlay.querySelector('[data-act="join"]');
       var joinInput = overlay.querySelector('#raum-input');
@@ -274,6 +305,9 @@
           : 'Du bist P2 (rechts) — Gastseite.';
       },
       fillChars: fillChars,
+      fillLevels: fillLevels,
+      getLevel: function () { return selectedLevel; },
+      setLevel: function (id) { selectedLevel = id || selectedLevel; fillLevels(selectedLevel); return selectedLevel; },
       setStatus: setStatus,
       showLink: showLink,
       showRetry: showRetry,

@@ -1,8 +1,8 @@
-/* Einstieg, Spielschleife, Host/Client-Logik. v3.0 — Solo/Testmodus. */
+/* Einstieg, Spielschleife, Host/Client-Logik. v3.1 — Level-System + Solo. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION = 'v3.0';
+  var VERSION = 'v3.1';
   Plaza.VERSION = VERSION;
   function sanitizeName(n) {
     n = String(n == null ? '' : n).replace(/[\u0000-\u001f<>]/g, '').trim();
@@ -20,6 +20,16 @@
       }
     } catch (e) {}
     return q;
+  }
+
+  function applyLevel(id) {
+    if (Plaza.Render && Plaza.Render.setLevel) {
+      return Plaza.Render.setLevel(id || 'hoelle');
+    }
+    return id || 'hoelle';
+  }
+  function currentLevel() {
+    return (Plaza.Render && Plaza.Render.getLevel) ? Plaza.Render.getLevel() : 'hoelle';
   }
 
   function start() {
@@ -229,8 +239,10 @@
     var ui = Plaza.UI.erstelle({
       root: document.body,
       getLink: function () { return netz ? netz.linkFuer(null, false) : ''; },
+      onLevel: function (id) { applyLevel(id); },
       onSolo: function () {
         soloMode = true;
+        applyLevel(ui.getLevel ? ui.getLevel() : currentLevel());
         netDown = false;
         seite = 0;
         hostName = liesName();
@@ -258,10 +270,11 @@
         mode = 'menue';
         ui.showScreen('menue');
         ui.setStatus('');
-        Plaza.Render.menueHint(render, 'Versus · Solo · v3.0');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v3.1');
       },
       onHost: function () {
         soloMode = false;
+        applyLevel(ui.getLevel ? ui.getLevel() : currentLevel());
         seite = 0;
         hostName = liesName();
         meinName = hostName;
@@ -383,6 +396,7 @@
       if (netz.istHost() && seite === 1) {
         c0 = gastWahl; c1 = hostWahl; nm0 = n1; nm1 = n0;
       }
+      applyLevel(currentLevel());
       kampf = Plaza.Kampf.neu(c0, c1, nm0, nm1);
       kampf.phase = 'countdown';
       kampf.countdown = 3;
@@ -400,6 +414,7 @@
       if (!soloMode || !hostWahl || !gastWahl) return;
       var n0 = hostName || Plaza.Chars.finde(hostWahl).name;
       var n1 = gastName || 'CPU';
+      applyLevel(ui.getLevel ? ui.getLevel() : currentLevel());
       kampf = Plaza.Kampf.neu(hostWahl, gastWahl, n0, n1);
       kampf.phase = 'countdown';
       kampf.countdown = 3;
@@ -419,7 +434,7 @@
       if (!(netz && netz.istHost() && kampf)) return;
       var snap = Plaza.Kampf.snapshot(kampf);
       letzterSnap = snap;
-      netz.sende({ typ: 'state', state: snap });
+      netz.sende({ typ: 'state', state: snap, level: currentLevel() });
     }
 
     netz = Plaza.Netz.erstelle({
@@ -491,10 +506,16 @@
           }
           if (netz.istHost() && (msg.typ === 'hello' || msg.typ === 'join')) {
             netDown = false; ui.setStatus('Mitspieler da — Charakter wählen');
-            if (netz.istHost()) netz.sende({ typ: 'seat', seite: seite, ver: VERSION });
+            if (netz.istHost()) {
+              netz.sende({ typ: 'seat', seite: seite, ver: VERSION });
+              netz.sende({ typ: 'level', level: currentLevel(), ver: VERSION });
+            }
             // eigenen Namen nochmal schicken
             netz.sende({ typ: 'name', seite: 0, name: hostName || liesName() });
           }
+        }
+        if (msg.typ === 'level' && !netz.istHost()) {
+          if (msg.level) applyLevel(msg.level);
         }
         if (msg.typ === 'wahl') {
           if (msg.ver && msg.ver !== VERSION) {
@@ -516,6 +537,7 @@
           if (msg.seite === 1) peerInput = msg.input || peerInput;
         }
         if (msg.typ === 'state' && !netz.istHost()) {
+          if (msg.level) applyLevel(msg.level);
           letzterSnap = msg.state;
           if (mode !== 'kampf') {
             mode = 'kampf';
@@ -711,7 +733,7 @@
         }
         acc = 0;
       } else if (mode === 'menue') {
-        Plaza.Render.menueHint(render, 'Versus · Solo · v3.0');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v3.1');
         acc = 0;
       } else {
         Plaza.Render.menueHint(render, statusElText());

@@ -1,9 +1,15 @@
+## v3.1 Level-System
+
+Vier Arenen wählbar: **Hölle**, **Dschungel**, **Brücke**, **zerstörte Stadt**. Wetter + Parallax bleiben. Host/Solo wählt die Arena im Menü.
+
+Live: https://topsentopsen.github.io/plaza-kampf/?v=3.1
+
 ## v3.0 Parallax
 
 Mehrschichtiges dynamisches Parallax: stärkere Kamera beim Laufen, Ebenen-Drift, Heat-Shimmer und Asche-Schleier. Theme bleibt Hölle.
 
 
-# Plaza-Kampf v3.0 — Parallax
+# Plaza-Kampf v3.1 — Level · Wetter · Parallax
 
 Dunkles Versus — *la Pelea del Infierno*. Feuer, Vulkane, ernste Street-Fighter-Chars. Statisches HTML/JS auf GitHub Pages.
 
@@ -37,7 +43,7 @@ Steuerung: ◀ ▶ ▲ · **A** leicht · **B** schwer · **S** Spezial.
 
 ## Technik
 
-`js/{palette,chars,kampf,netz,sound,render,ui,main}.js` · Tests: `node tests/kampf.test.js`
+`js/{palette,chars,kampf,netz,sound,levels,render,ki,ui,main}.js` · Tests: `node tests/kampf.test.js`
 
 Design-Plan: siehe Repo-Extern `/workspace/plaza-kampf-claude/design-v0.3-2026-10-24.md`
 
