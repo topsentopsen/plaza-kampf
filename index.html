@@ -10,7 +10,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-title" content="Plaza-Kampf">
-<title>Plaza-Kampf v3.7</title>
+<title>Plaza-Kampf v3.8</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230a0608'/%3E%3Ccircle cx='4' cy='11' r='3' fill='%238a1008'/%3E%3Ccircle cx='12' cy='11' r='3' fill='%23ff3a08'/%3E%3Cpath d='M6 4h4v3H6z' fill='%23ff6020'/%3E%3C/svg%3E">
 <style>
   html, body { margin: 0; width: 100%; height: 100%; height: 100dvh; width: 100dvw;
@@ -35,7 +35,7 @@
     max-width: 100dvw; max-height: 100dvh; max-height: 100svh;
     position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
     margin: 0; z-index: 1; }
-  /* v3.7: Touch-Pads als halbtransparentes Overlay ÜBER dem Canvas */
+  /* v3.8: Touch-Pads als halbtransparentes Overlay ÜBER dem Canvas */
   body.landscape-kampf #controls,
   body.ctrl-overlay #controls {
     position: fixed !important; left: 0; right: 0; bottom: 0; z-index: 7;
@@ -64,7 +64,7 @@
   }
   :fullscreen, :-webkit-full-screen { background: #050208; }
   :fullscreen body, :-webkit-full-screen body { width: 100%; height: 100%; }
-  /* v3.7: detaillierte 1280-Chars — auto statt pixelated (weniger Block-Artefakte auf Retina) */
+  /* v3.8: detaillierte 1280-Chars — auto statt pixelated (weniger Block-Artefakte auf Retina) */
   canvas#spiel { display: block; image-rendering: auto; image-rendering: high-quality;
     touch-action: none; -webkit-tap-highlight-color: transparent; width: 100%; height: 100%; }
   canvas { display: block; touch-action: none; -webkit-tap-highlight-color: transparent; }
@@ -123,9 +123,15 @@
   .pad button.down, .actions button.down { transform: translateY(3px); box-shadow: 0 0 0 3px #ff3a08; }
   .hint { font-size: 12px; color: #8a6050; margin-top: 8px; }
   .hint.steps { line-height: 1.45; color: #c09070; }
-  #version { position: fixed; top: 6px; right: 10px; font-size: 11px; color: #ff6020; opacity: .85; z-index: 6; }
+  #version { position: fixed; top: 6px; right: 56px; font-size: 11px; color: #ff6020; opacity: .85; z-index: 6; }
   #mute { position: fixed; top: 4px; left: 8px; z-index: 6; width: 40px; height: 40px; padding: 0;
     border-radius: 50%; font-size: 18px; background: #1a0a10; box-shadow: 0 2px 0 #000; color: #ff6020; }
+  #btn-pause { position: fixed; top: 4px; right: 8px; z-index: 8; width: 44px; height: 44px; padding: 0;
+    border-radius: 50%; font-size: 20px; line-height: 1; background: #1a0a10; color: #ffe8d0;
+    box-shadow: 0 2px 0 #000, 0 0 0 2px #5a1810; display: none; }
+  #btn-pause.show { display: block; }
+  #btn-pause:active { transform: translateY(2px); }
+  body.landscape-kampf #btn-pause { top: 4px; right: 8px; opacity: .92; }
   #fs { position: fixed; top: 4px; left: 52px; z-index: 8; width: 44px; height: 44px; padding: 0;
     border-radius: 50%; font-size: 20px; background: #2a1008; box-shadow: 0 2px 0 #000, 0 0 0 2px #ff3a08;
     color: #ffe080; }
@@ -220,7 +226,8 @@
 <button type="button" id="mute" data-act="mute" aria-label="Ton aus">🔊</button>
 <div id="ios-hint" role="status"><strong>iPhone Safari:</strong> Die Tab-/Adressleiste lässt sich im normalen Safari <em>nicht dauerhaft</em> ausblenden (iOS-Limit). Besser: Teilen → <em>Zum Home-Bildschirm</em> — dann startet Plaza ohne Browser-UI. Im Tab: quer drehen + ⛶ tippen (Leiste so klein wie möglich).<br><button type="button" data-act="ios-hint-ok">Verstanden</button></div>
 <button type="button" id="fs" data-act="fs" aria-label="Vollbild" title="Vollbild">⛶</button>
-<div id="version">Plaza-Kampf v3.7</div>
+<div id="version">Plaza-Kampf v3.8</div>
+<button type="button" id="btn-pause" data-act="pause" aria-label="Menü" title="Menü">☰</button>
 <div id="rahmen"><canvas id="spiel" width="1280" height="768"></canvas></div>
 <div id="status"></div>
 
@@ -250,7 +257,7 @@
     <div class="row">
       <input id="raum-input" type="text" placeholder="Raum-Code" autocomplete="off" autocapitalize="off" spellcheck="false">
     </div>
-    <p class="hint">v3.7: Landscape — Canvas max, Touch-Overlay, schärfere Retina-Chars.</p>
+    <p class="hint">v3.8: Backwalk + Pause-Menü.</p>
   </div>
 
   <div class="screen" data-screen="warte" hidden>
@@ -269,7 +276,7 @@
     </div>
     <p class="hint"><strong>Host:</strong> Code/Link teilen (ohne &amp;host=1).<br>
     <strong>Gast:</strong> Namen tippen → <em>Jetzt beitreten</em>.<br>
-    Beide Handys: dieselbe Version (?v=3.7). Host wählt die Arena. iPhone: Home-Bildschirm = ohne Safari-Leiste; im Tab nur teilweise einklappbar.</p>
+    Beide Handys: dieselbe Version (?v=3.8). Host wählt die Arena. iPhone: Home-Bildschirm = ohne Safari-Leiste; im Tab nur teilweise einklappbar.</p>
   </div>
 
   <div class="screen" data-screen="ende" hidden>
@@ -295,6 +302,16 @@
       <button type="button" class="secondary" data-act="swap">Seite tauschen (P1↔P2)</button>
     </div>
     <p class="hint" id="seite-hint">Du bist P1 (links).</p>
+  </div>
+
+  <div class="screen" data-screen="pause" hidden>
+    <h1>Pause</h1>
+    <p>Kampf unterbrochen. Weiter spielen oder zum Hauptmenü.</p>
+    <div class="row">
+      <button type="button" class="accent" data-act="resume">Weiter</button>
+      <button type="button" class="secondary" data-act="abort">Zum Hauptmenü</button>
+    </div>
+    <p class="hint">Online: Abbruch trennt die Verbindung.</p>
   </div>
 
   <div class="screen" data-screen="tutorial" hidden>
@@ -333,15 +350,15 @@
 
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="js/palette.js?v=3.7"></script>
-<script src="js/chars.js?v=3.7"></script>
-<script src="js/kampf.js?v=3.7"></script>
-<script src="js/netz.js?v=3.7"></script>
-<script src="js/sound.js?v=3.7"></script>
-<script src="js/levels.js?v=3.7"></script>
-<script src="js/render.js?v=3.7"></script>
-<script src="js/ki.js?v=3.7"></script>
-<script src="js/ui.js?v=3.7"></script>
-<script src="js/main.js?v=3.7"></script>
+<script src="js/palette.js?v=3.8"></script>
+<script src="js/chars.js?v=3.8"></script>
+<script src="js/kampf.js?v=3.8"></script>
+<script src="js/netz.js?v=3.8"></script>
+<script src="js/sound.js?v=3.8"></script>
+<script src="js/levels.js?v=3.8"></script>
+<script src="js/render.js?v=3.8"></script>
+<script src="js/ki.js?v=3.8"></script>
+<script src="js/ui.js?v=3.8"></script>
+<script src="js/main.js?v=3.8"></script>
 </body>
 </html>

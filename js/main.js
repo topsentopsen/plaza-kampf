@@ -1,8 +1,8 @@
-/* Einstieg, Spielschleife, Host/Client-Logik. v3.7 — Landscape Overlay-Controls, max Canvas. */
+/* Einstieg, Spielschleife, Host/Client-Logik. v3.8 — Backwalk + Pause-Menü. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION = 'v3.7';
+  var VERSION = 'v3.8';
   Plaza.VERSION = VERSION;
   function sanitizeName(n) {
     n = String(n == null ? '' : n).replace(/[\u0000-\u001f<>]/g, '').trim();
@@ -48,6 +48,7 @@
       peerInput = { l: false, r: false, u: false, d: false, a: false, b: false, c: false };
     }
     var mode = 'menue';
+    var paused = false;
     var hostWahl = null, gastWahl = null;
     var pendingRaum = null;
     var meinName = '';
@@ -200,7 +201,7 @@
       var dpr = Math.min(window.devicePixelRatio || 1, 3);
       var land = istLandscape();
       var fight = (mode === 'kampf' || mode === 'ende');
-      // v3.7: Landscape-Kampf — Controls als Overlay, Canvas nutzt volle Viewport-Fläche
+      // v3.8: Landscape-Kampf — Controls als Overlay, Canvas nutzt volle Viewport-Fläche
       var overlayCtrl = land && fight;
       document.body.classList.toggle('landscape', land);
       document.body.classList.toggle('landscape-kampf', land && fight);
@@ -339,16 +340,65 @@
         try { if (Plaza.Sound) Plaza.Sound.init(); } catch (eS) {}
       },
       onMenue: function () {
+        paused = false;
         soloMode = false;
         kampf = null;
         letzterSnap = null;
         hostWahl = null;
         gastWahl = null;
         meinChar = null;
+        peerChar = null;
+        clearPeerInput();
+        if (netz) {
+          try { netz.trennen(); } catch (eT) {}
+        }
         mode = 'menue';
         ui.showScreen('menue');
         ui.setStatus('');
-        Plaza.Render.menueHint(render, 'Versus · Solo · v3.7');
+        if (ui.setPauseBtn) ui.setPauseBtn(false);
+        Plaza.Render.menueHint(render, 'Versus · Solo · v3.8');
+      },
+      onPause: function () {
+        if (mode !== 'kampf' && mode !== 'ende') return;
+        paused = true;
+        if (ui.resetInput) ui.resetInput();
+        lokalInput = { l: false, r: false, u: false, d: false, a: false, b: false, c: false };
+        ui.showScreen('pause');
+        ui.setStatus('Pause');
+      },
+      onResume: function () {
+        if (!paused && mode !== 'pause') {
+          /* allow resume from pause screen even if flag lag */
+        }
+        paused = false;
+        if (letzterSnap && letzterSnap.phase === 'ende') {
+          mode = 'ende';
+          ui.showScreen('ende');
+        } else {
+          mode = 'kampf';
+          ui.showScreen('kampf');
+        }
+        ui.setStatus(soloMode ? 'Testmodus vs CPU' : '');
+      },
+      onAbort: function () {
+        paused = false;
+        // reuse onMenue disconnect path
+        soloMode = false;
+        kampf = null;
+        letzterSnap = null;
+        hostWahl = null;
+        gastWahl = null;
+        meinChar = null;
+        peerChar = null;
+        clearPeerInput();
+        if (netz) {
+          try { netz.trennen(); } catch (eT2) {}
+        }
+        mode = 'menue';
+        ui.showScreen('menue');
+        ui.setStatus('Kampf abgebrochen.');
+        if (ui.setPauseBtn) ui.setPauseBtn(false);
+        Plaza.Render.menueHint(render, 'Versus · Solo · v3.8');
       },
       onHost: function () {
         soloMode = false;
@@ -764,7 +814,7 @@
       skalieren();
       var tabHidden = typeof document !== 'undefined' && document.hidden;
 
-      if (soloMode && (mode === 'kampf' || mode === 'ende') && kampf) {
+      if (soloMode && (mode === 'kampf' || mode === 'ende') && kampf && !paused) {
         while (acc >= STEP) {
           acc -= STEP;
           var cpu = kampf.p[1];
@@ -793,7 +843,7 @@
           mode = 'kampf';
           ui.showScreen('kampf');
         }
-      } else if (mode === 'kampf' && netz && netz.istHost() && kampf) {
+      } else if (mode === 'kampf' && netz && netz.istHost() && kampf && !paused) {
         var phaseVorher = kampf.phase;
         while (acc >= STEP) {
           acc -= STEP;
@@ -827,6 +877,9 @@
           mode = 'kampf';
           ui.showScreen('kampf');
         }
+      } else if (paused && letzterSnap) {
+        if (!tabHidden) { Plaza.Render.zeichne(render, letzterSnap, seite); framesDrawn++; } else { framesSkipped++; }
+        acc = 0;
       } else if ((mode === 'kampf' || mode === 'ende') && letzterSnap) {
         // Gast: Input periodisch erneut senden (Paketverlust → sonst sticky keys)
         if (mode === 'kampf' && netz && !netz.istHost() && netz.istBereit()) {
@@ -849,7 +902,7 @@
         }
         acc = 0;
       } else if (mode === 'menue') {
-        Plaza.Render.menueHint(render, 'Versus · Solo · v3.7');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v3.8');
         acc = 0;
       } else {
         Plaza.Render.menueHint(render, statusElText());
@@ -890,7 +943,7 @@
     document.addEventListener('webkitfullscreenchange', function () { updateFsButton(); _skKey = ''; skalieren(); });
     skalieren();
     if ('serviceWorker' in navigator) {
-      try { navigator.serviceWorker.register('sw.js?v=3.7'); } catch (eSw) {}
+      try { navigator.serviceWorker.register('sw.js?v=3.8'); } catch (eSw) {}
     }
     requestAnimationFrame(loop);
   }

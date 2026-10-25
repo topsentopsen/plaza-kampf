@@ -22,7 +22,7 @@ assert.ok(rend.indexOf('function getLevel') !== -1, 'getLevel');
 assert.ok(rend.indexOf('Plaza.Levels.bake') !== -1, 'dispatch bake');
 
 assert.ok(html.indexOf('id="level-pick"') !== -1, 'level-pick UI');
-assert.ok(html.indexOf('js/levels.js?v=3.7') !== -1, 'levels script');
+assert.ok(html.indexOf('js/levels.js?v=3.8') !== -1, 'levels script');
 assert.ok(ui.indexOf('function fillLevels') !== -1, 'fillLevels');
 assert.ok(main.indexOf('function applyLevel') !== -1, 'applyLevel');
 assert.ok(main.indexOf("typ: 'level'") !== -1, 'netz level msg');

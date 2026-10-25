@@ -1,4 +1,4 @@
-/* Autoritative Kampfsimulation (läuft auf dem Host). v1.4: 1280×768 Geometrie ×4. */
+/* Autoritative Kampfsimulation (Host). v3.8: Backwalk in Block-Stance. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -254,9 +254,15 @@
       p.vx *= 0.85;
     } else if (!p.atk) {
       var dir = (inp.r ? 1 : 0) - (inp.l ? 1 : 0);
-      // Beim Blocken nicht vorwärts laufen
+      // Block-Stance (weg vom Gegner): Rückwärtslaufen wie SF, kein Facing-Flip
       if (p.blocking) {
-        p.vx *= 0.5;
+        var away = p.facing > 0 ? -1 : 1;
+        if (dir === away) {
+          p.vx = dir * c.speed * (p.crouch ? 0.35 : 1);
+        } else {
+          p.vx *= 0.5;
+          if (Math.abs(p.vx) < 0.2) p.vx = 0;
+        }
       } else if (dir && !p.crouch) {
         p.vx = dir * c.speed;
         p.facing = dir;

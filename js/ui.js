@@ -1,4 +1,4 @@
-/* Menü, Charakterwahl, Touch-Steuerung. v3.5 — pointer-capture hart. */
+/* Menü, Charakterwahl, Touch-Steuerung. v3.8 — Pause-Taste + Abbruch. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -17,6 +17,9 @@
     var onSwap = opts.onSwap || function () {};
     var onSolo = opts.onSolo || function () {};
     var onMenue = opts.onMenue || function () {};
+    var onPause = opts.onPause || function () {};
+    var onResume = opts.onResume || function () {};
+    var onAbort = opts.onAbort || function () { onMenue(); };
     var onLevel = opts.onLevel || function () {};
     var getLink = opts.getLink || function () { return ''; };
     var selectedLevel = 'hoelle';
@@ -39,10 +42,16 @@
         screens[i].hidden = screens[i].dataset.screen !== name;
       }
       controls.hidden = name !== 'kampf';
-      // ende: Overlay mit Rematch-Knopf über dem Canvas
       overlay.hidden = (name === 'kampf');
       if (name === 'ende') overlay.classList.add('ende-mode');
       else overlay.classList.remove('ende-mode');
+      setPauseBtn(name === 'kampf' || name === 'pause' || name === 'ende');
+    }
+    function setPauseBtn(on) {
+      var b = root.querySelector('#btn-pause');
+      if (!b) return;
+      if (on) b.classList.add('show');
+      else b.classList.remove('show');
     }
     function setEnde(titel, text) {
       var tEl = overlay.querySelector('#ende-titel');
@@ -261,6 +270,22 @@
         if (Plaza.Sound) Plaza.Sound.sfx('ui');
         showScreen('menue');
       });
+      var pauseBtn = root.querySelector('[data-act="pause"]');
+      if (pauseBtn) pauseBtn.addEventListener('click', function (e) {
+        e.preventDefault(); e.stopPropagation();
+        if (Plaza.Sound) { Plaza.Sound.init(); Plaza.Sound.sfx('ui'); }
+        onPause();
+      });
+      var resumeBtn = overlay.querySelector('[data-act="resume"]');
+      if (resumeBtn) resumeBtn.addEventListener('click', function () {
+        if (Plaza.Sound) Plaza.Sound.sfx('ui');
+        onResume();
+      });
+      var abortBtn = overlay.querySelector('[data-act="abort"]');
+      if (abortBtn) abortBtn.addEventListener('click', function () {
+        if (Plaza.Sound) Plaza.Sound.sfx('ui');
+        onAbort();
+      });
       var iosOk = root.querySelector('[data-act="ios-hint-ok"]');
       if (iosOk) iosOk.addEventListener('click', function () {
         var h = root.querySelector('#ios-hint');
@@ -287,6 +312,13 @@
     bindTouch();
     bindKeys();
     bindMenue();
+    window.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape') return;
+      var pauseScreen = overlay.querySelector('[data-screen="pause"]');
+      var pauseVisible = pauseScreen && !pauseScreen.hidden && !overlay.hidden;
+      if (pauseVisible) { e.preventDefault(); onResume(); }
+      else if (controls && !controls.hidden) { e.preventDefault(); onPause(); }
+    });
 
     function showRetry(on) {
       var b = overlay.querySelector('[data-act="retry"]');
@@ -319,6 +351,7 @@
       showLink: showLink,
       showRetry: showRetry,
       showJoinConfirm: showJoinConfirm,
+      setPauseBtn: setPauseBtn,
       getInput: function () { return input; },
       resetInput: function () {
         input = { l: false, r: false, u: false, d: false, a: false, b: false, c: false };
