@@ -1,9 +1,9 @@
-## v2.8 RC
+## v2.9 Parallax
 
-Release-Candidate nach Grafik-Serie (v1.4–v1.8) und QA-Serie (v1.9–v2.8).
-1280×768, detaillierte Chars, Solo+Multiplayer, erweiterte Tests.
+Mehrschichtiges dynamisches Parallax: stärkere Kamera beim Laufen, Ebenen-Drift, Heat-Shimmer und Asche-Schleier. Theme bleibt Hölle.
 
-# Plaza-Kampf v2.8
+
+# Plaza-Kampf v2.9 — Parallax
 
 Dunkles Versus — *la Pelea del Infierno*. Feuer, Vulkane, ernste Street-Fighter-Chars. Statisches HTML/JS auf GitHub Pages.
 
@@ -114,9 +114,9 @@ Live: https://topsentopsen.github.io/plaza-kampf/
 - Cache: `?v=1.2`
 
 
-## v2.8 „Allein üben“
+## v2.9 „Allein üben“
 - Testmodus ohne zweites Handy: Menü → **Allein üben**
 - Lokaler Kampf gegen einfache CPU (Dummy-Anteile: Block/Abstand)
 - Charakterwahl + Name wie online; Rematch & Menü am Ende
 - Online-Versus unverändert
-- Cache: `?v=2.8`
+- Cache: `?v=2.9`

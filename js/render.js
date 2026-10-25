@@ -1,4 +1,4 @@
-/* Pixel-Canvas v1.8 (Porträts/HUD/Win-Posen/Perf, Basis v1.4): 1280×768, detaillierte 4×-Sprites, Hölle. */
+/* Pixel-Canvas v2.9: Parallax dynamisch (Drift/Heat/stärkere Kamera), Basis v1.8 Hölle 1280×768. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -69,9 +69,12 @@
   }
 
   /* ---- Arena v1.6: nativ, 1 Layer-Pixel = 1 Canvas-Pixel ---- */
-  var LW = 1440;                 // 1280 + 2×80 Kamera-Spiel
-  var CAM_MAX = 64;              // ±64 (nicht 80): L5 (×1.15) deckt sonst den Rand nicht
-  var PAR = { L0: 0.10, L1: 0.25, L2: 0.45, L3: 0.70, L4: 1.0, L5: 1.15 };
+  var LW = 1600;                 // 1280 + 2×160 — mehr Kamera-Spiel für spürbares Parallax
+  var CAM_PAD = 160;             // (LW - W) / 2
+  var CAM_MAX = 120;             // ±120: L5 (×1.28) bleibt innerhalb CAM_PAD
+  var PAR = { L0: 0.04, L1: 0.15, L2: 0.35, L3: 0.58, L4: 1.0, L5: 1.28 };
+  // Eigenbewegung der Ebenen (nicht starr): sin-Sway + langsamer Drift
+  var DRIFT = { L0: 0.010, L1: 0.022, L2: 0.014, L3: 0.006, L4: 0.0, L5: 0.028 };
   // 12-Stufen-Glutrampe (Plaza.Palette.glut überschreibt, falls vorhanden)
   var GLUT_DEF = ['#050208', '#0c0510', '#160810', '#220a0c', '#34100a', '#4a1808',
     '#6a1c08', '#9a2408', '#d03010', '#ff4a18', '#ff9a38', '#fff0c0'];
@@ -83,7 +86,7 @@
   var KIOSK = { x: 1120, y: 432 };                            // L3, Feuerbecken
   var PUBLIKUM = [[404, 468, 0], [446, 474, 1], [748, 470, 1], [790, 466, 0], [836, 474, 1],
     [960, 468, 0], [1010, 472, 1], [1214, 466, 0], [1262, 474, 1]];  // L3: x, y-oben, Sprite
-  var FACKELN = [130, 1310];                                  // L5-x, Flamme bei y 572
+  var FACKELN = [160, 1440];                                  // L5-x, Flamme bei y 572 (LW=1600)
   var FLAMME = [
     [[-10, -22, 20, 22, '#d03010'], [-6, -34, 12, 30, '#ff7a28'], [-2, -24, 6, 18, '#fff0c0']],
     [[-12, -20, 22, 20, '#d03010'], [-4, -38, 10, 34, '#ff7a28'], [0, -26, 6, 18, '#fff0c0']],
@@ -690,7 +693,17 @@
       L4r: L4r, L5f: L5f, daemon: [daemon(false), daemon(true)], kegel: kegel };
   }
 
-  function ofs(par) { return Math.round(-camX * par) - 80; }
+  function driftOf(key, tick) {
+    if (key == null || tick == null || !DRIFT[key]) return 0;
+    var d = DRIFT[key];
+    // Sway + kontinuierlicher Drift (modulo, damit Layer nicht abwandern)
+    var sway = Math.sin(tick * d * 2.4) * (8 + d * 280);
+    var slide = ((tick * d * 18) % 48) - 24;
+    return sway + slide;
+  }
+  function ofs(par, key, tick) {
+    return Math.round(-camX * par - driftOf(key, tick)) - CAM_PAD;
+  }
 
   // v1.8 Perf: Zeilenläufe pro Layer [[y0, y1], …], einmalig aus den Alphawerten berechnet
   var LAYER_ORDER = ['L0', 'L1', 'L2', 'L3', 'L4', 'L5'];
@@ -730,10 +743,10 @@
       L._runs = runs;
     }
   }
-  function drawLayer(ctx, layer, par, tick) {
+  function drawLayer(ctx, layer, par, tick, key) {
     if (!layer) return;
     if (layer._runs === undefined) layerRuns();
-    var rs = layer._runs, x0 = ofs(par), i, a, hh;
+    var rs = layer._runs, x0 = ofs(par, key, tick), i, a, hh;
     if (!rs) { ctx.drawImage(layer, x0, 0); return; }
     for (i = 0; i < rs.length; i++) {
       a = rs[i][0]; hh = rs[i][1] - a;
@@ -756,24 +769,24 @@
     if (!layers) layers = backeLayers();
     var G = P().glut || GLUT_DEF, o, i, f;
     arenaSnap = snap || null;
-    // Kamera: Spielermitte, Clamp ±CAM_MAX, Lerp 0.12 (ohne Snap: camX vom Aufrufer, z. B. Menü)
+    // Kamera v2.9: stärkerer Follow → spürbarer Perspektivwechsel beim Laufen
     if (snap && snap.p && snap.p.length === 2) {
-      var target = ((snap.p[0].x + snap.p[1].x) / 2 - W / 2) * 0.15;
+      var target = ((snap.p[0].x + snap.p[1].x) / 2 - W / 2) * 0.72;
       target = Math.max(-CAM_MAX, Math.min(CAM_MAX, target));
-      camX += (target - camX) * 0.12;
+      camX += (target - camX) * 0.18;
       publikumHit(snap);
     }
     if (hopT > 0) hopT--;
 
     // L0 + Blutmond-Puls
-    drawLayer(ctx, layers.L0, PAR.L0, tick);
+    drawLayer(ctx, layers.L0, PAR.L0, tick, 'L0');
     if ((tick % 90) < 10) {
       ctx.fillStyle = 'rgba(255,60,20,0.14)';
-      ctx.beginPath(); ctx.arc(MOND.x + ofs(PAR.L0), MOND.y, MOND.r + 24, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(MOND.x + ofs(PAR.L0, 'L0', tick), MOND.y, MOND.r + 24, 0, Math.PI * 2); ctx.fill();
     }
     // L1 + Krater-Flackern
-    drawLayer(ctx, layers.L1, PAR.L1, tick);
-    o = ofs(PAR.L1);
+    drawLayer(ctx, layers.L1, PAR.L1, tick, 'L1');
+    o = ofs(PAR.L1, 'L1', tick);
     var vf = ((tick / 6) | 0) % 4;
     for (i = 0; i < KRATER.length; i++) {
       var kx = KRATER[i][0] + o, ky = KRATER[i][1], v = (vf + i) % 4;
@@ -783,8 +796,8 @@
       ctx.fillRect(kx - 4 + ((v * 3) % 7), ky - 14 - v * 6, 2, 4);
     }
     // L2 + Glocke + Neon „PLAZA“
-    drawLayer(ctx, layers.L2, PAR.L2, tick);
-    o = ofs(PAR.L2);
+    drawLayer(ctx, layers.L2, PAR.L2, tick, 'L2');
+    o = ofs(PAR.L2, 'L2', tick);
     ctx.globalAlpha = 0.18 + 0.12 * Math.sin(tick / 11);
     ctx.fillStyle = G[9];
     ctx.fillRect(GLOCKE.x + o - 16, GLOCKE.y - 20, 32, 34);
@@ -799,14 +812,14 @@
     ctx.textAlign = 'center';
     ctx.fillText('PLAZA', NEON.x + o, NEON.y);
     // Publikum (hinter der Balustrade von L3)
-    o = ofs(PAR.L3);
+    o = ofs(PAR.L3, 'L3', tick);
     for (i = 0; i < PUBLIKUM.length; i++) {
       var pu = PUBLIKUM[i], dy = ((tick / 20 + i * 1.7) | 0) % 2 * 2;
       if (hopT > 0) dy += Math.round(Math.abs(Math.sin((20 - hopT) * 0.45 + i * 0.9)) * 14);
       ctx.drawImage(layers.daemon[hopT > 0 ? 1 - pu[2] : pu[2]], pu[0] + o - 20, pu[1] - dy);
     }
     // L3 + Brunnen (Tropfen auf Parabeln, Glitzer, Strahl) + Kiosk-Feuer
-    drawLayer(ctx, layers.L3, PAR.L3, tick);
+    drawLayer(ctx, layers.L3, PAR.L3, tick, 'L3');
     var bx = BRUNNEN.x + o;
     f = ((tick / 5) | 0) % 4;
     ctx.fillStyle = f % 2 ? G[9] : '#ff6020';
@@ -836,8 +849,8 @@
     ctx.fillStyle = G[10]; ctx.fillRect(kxx - 6 + kf * 2, KIOSK.y - 22 + kf * 2, 8, 20 - kf * 2);
     ctx.fillStyle = G[11]; ctx.fillRect(kxx - 2, KIOSK.y - 10, 4, 8);
     // L4 + pulsierende Risse + Medaillon-Glut
-    drawLayer(ctx, layers.L4, PAR.L4, tick);
-    o = ofs(PAR.L4);
+    drawLayer(ctx, layers.L4, PAR.L4, tick, 'L4');
+    o = ofs(PAR.L4, 'L4', tick);
     var rl = layers.L4r && layers.L4r[((tick / 16) | 0) % 3];
     if (rl) ctx.drawImage(rl, o, 600);
     var pulse = 0.10 + 0.08 * Math.sin(tick / 14);
@@ -850,16 +863,30 @@
       var life = 220 + (i * 37) % 120, ph = (tick + i * 53) % life;
       var ey = 768 - ph * (1.6 + (i % 5) * 0.3);
       if (ey < 120) continue;
-      var ex = ((i * 197 + 61) % LW) + Math.sin((tick + i * 20) / 18) * 10 + ofs(PAR.L4);
+      var ex = ((i * 197 + 61) % LW) + Math.sin((tick + i * 20) / 18) * 10 + ofs(PAR.L4, 'L4', tick);
       ctx.fillStyle = (ey > 480 && ey < 640) ? G[6] : (ph < life * 0.4 ? G[10] : G[8]);
       ctx.fillRect(Math.round(ex), Math.round(ey), 2, 2);
+    }
+    // v2.9: Asche-Schleier driftet (L1-Tempo), Heat-Shimmer am Boden — dynamisch, nicht starr
+    for (i = 0; i < 18; i++) {
+      var ax = ((i * 71 + tick * 0.55) % LW) + ofs(PAR.L1, 'L1', tick);
+      var ay = 200 + ((i * 97 + tick) % 280);
+      ctx.fillStyle = 'rgba(40,20,30,' + (0.18 + (i % 3) * 0.06).toFixed(2) + ')';
+      ctx.fillRect(Math.round(ax), Math.round(ay), 3 + (i % 2), 2);
+    }
+    var shim = Math.sin(tick / 9) * 3;
+    ctx.fillStyle = 'rgba(255,120,40,0.045)';
+    for (i = 0; i < 5; i++) {
+      var sy = 560 + i * 18 + Math.round(Math.sin(tick / 7 + i) * 4);
+      ctx.fillRect(0, sy, W, 3);
+      ctx.fillRect(Math.round(shim * (i + 1)), sy + 6, W, 2);
     }
   }
 
   function fg(ctx, tick) {
     if (!layers) return;
-    drawLayer(ctx, layers.L5, PAR.L5, tick);
-    var o = ofs(PAR.L5), f = ((tick / 5) | 0) % 3;
+    drawLayer(ctx, layers.L5, PAR.L5, tick, 'L5');
+    var o = ofs(PAR.L5, 'L5', tick), f = ((tick / 5) | 0) % 3;
     var ps = arenaSnap && arenaSnap.p;
     for (var i = 0; i < FACKELN.length; i++) {
       var fx = FACKELN[i] + o, a = 1;
@@ -2819,7 +2846,7 @@
     applyBuf(ctx);
     if (!layers) layers = backeLayers();
     // Zeige Arena auch im Menü
-    camX = Math.sin(Date.now() / 3000) * 24;
+    camX = Math.sin(Date.now() / 2800) * 48;
     arena(ctx, (Date.now() / 50) | 0, null);
     fg(ctx, 0);
     ctx.fillStyle = 'rgba(0,0,0,0.72)';

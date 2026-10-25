@@ -1,4 +1,4 @@
-/* v2.8 RC: Vollkampf bis Ende + Rematch + Snapshot-Stabilität */
+/* v2.9 RC: Vollkampf bis Ende + Rematch + Snapshot-Stabilität */
 var assert = require('assert');
 var path = require('path');
 var root = path.join(__dirname, '..');
@@ -46,7 +46,7 @@ var kampfSrc = require('fs').readFileSync(path.join(root, 'js/kampf.js'), 'utf8'
 assert.ok(kampfSrc.indexOf('1280') !== -1 || kampfSrc.indexOf('BODEN') !== -1);
 
 var main = require('fs').readFileSync(path.join(root, 'js/main.js'), 'utf8');
-assert.ok(/VERSION = 'v2\.8'/.test(main), 'VERSION v2.8');
+assert.ok(/VERSION = 'v2\.9'/.test(main), 'VERSION v2.9');
 var html = require('fs').readFileSync(path.join(root, 'index.html'), 'utf8');
 assert.ok(html.indexOf('1280') !== -1 || html.indexOf('canvas') !== -1);
 
