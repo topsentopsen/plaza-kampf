@@ -21,8 +21,14 @@
         heavy: { name: 'Sonnenhieb', dmg: 14, startup: 9, active: 4, recovery: 14, knock: 18, reach: 104, high: 64, overhead: true },
         special: { name: 'Pa amb oli', dmg: 18, startup: 12, active: 5, recovery: 18, knock: 22, reach: 136, high: 72,
           armor: { von: 1, bis: 10, hits: 1 } },
+        special2: { name: 'Ankerhieb', dmg: 15, startup: 11, active: 4, recovery: 17, knock: 16, reach: 108, high: 70,
+          armor: { von: 4, bis: 12, hits: 1 } },
         air: { name: 'Netz-Haken', dmg: 7, startup: 5, active: 4, recovery: 10, knock: 10, reach: 96, high: 56 }
-      }
+      },
+      motions: [
+        { hint: '↓↘→+A', name: 'Pa amb oli', seq: [2, 3, 6], alt: [2, 6], btn: 'a', art: 'special', win: 22, altWin: 14 },
+        { hint: '↓↙←+B', name: 'Ankerhieb', seq: [2, 1, 4], alt: [2, 4], btn: 'b', art: 'special2', win: 22, altWin: 14 }
+      ]
     },
     {
       id: 'lola', name: 'Lola', spitzname: 'La Rosa',
@@ -40,8 +46,14 @@
           hits: 2, dash: 80 },
         special: { name: 'Rosenregen', dmg: 10, startup: 10, active: 8, recovery: 14, knock: 10, reach: 192, high: 80,
           projectile: true, proj: { typ: 'fächer', spd: 8.8, life: 42, angles: [-0.4, 0, 0.4] } },
+        special2: { name: 'Flamenco', dmg: 7, startup: 7, active: 6, recovery: 13, knock: 11, reach: 108, high: 52,
+          hits: 2, dash: 70 },
         air: { name: 'Diagonal-Tritt', dmg: 8, startup: 4, active: 5, recovery: 10, knock: 12, reach: 88, high: 64, overhead: true }
-      }
+      },
+      motions: [
+        { hint: '↓↘→+A', name: 'Rosenregen', seq: [2, 3, 6], alt: [2, 6], btn: 'a', art: 'special', win: 22, altWin: 14 },
+        { hint: '↓↙←+B', name: 'Flamenco', seq: [2, 1, 4], alt: [2, 4], btn: 'b', art: 'special2', win: 22, altWin: 14 }
+      ]
     },
     {
       id: 'toni', name: 'Toni', spitzname: 'El Herrero',
@@ -59,8 +71,13 @@
           armor: { von: 10, bis: 14, hits: 1 } },
         special: { name: 'Erdstoß', dmg: 20, startup: 15, active: 6, recovery: 22, knock: 26, reach: 120, high: 48,
           projectile: true, proj: { typ: 'bodenwelle', vx: 8.8, life: 28, dmg: 20, knock: 26 } },
+        special2: { name: 'Glutfaust', dmg: 17, startup: 6, active: 4, recovery: 18, knock: 18, reach: 92, high: 100 },
         air: { name: 'Hammerfall', dmg: 12, startup: 8, active: 4, recovery: 14, knock: 16, reach: 80, high: 72, overhead: true }
-      }
+      },
+      motions: [
+        { hint: '↓↘→+A', name: 'Erdstoß', seq: [2, 3, 6], alt: [2, 6], btn: 'a', art: 'special', win: 22, altWin: 14 },
+        { hint: '→↓↘+A', name: 'Glutfaust', seq: [6, 2, 3], btn: 'a', art: 'special2', win: 18 }
+      ]
     },
     {
       id: 'rocco', name: 'Rocco', spitzname: 'El Portero',
@@ -78,8 +95,14 @@
           dash: 96, armor: { von: 8, bis: 14, hits: 1, proj: true } },
         special: { name: 'Plaza-Wurf', dmg: 16, startup: 8, active: 4, recovery: 16, knock: 32, reach: 80, high: 72,
           throw: true, unblockbar: true },
+        special2: { name: 'Rammstoß', dmg: 14, startup: 8, active: 5, recovery: 16, knock: 20, reach: 108, high: 64,
+          dash: 108, armor: { von: 4, bis: 12, hits: 1, proj: true } },
         air: { name: 'Körpercheck', dmg: 9, startup: 6, active: 4, recovery: 12, knock: 14, reach: 88, high: 64 }
-      }
+      },
+      motions: [
+        { hint: '↓↘→+A', name: 'Plaza-Wurf', seq: [2, 3, 6], alt: [2, 6], btn: 'a', art: 'special', win: 22, altWin: 14 },
+        { hint: '→↓↘+B', name: 'Rammstoß', seq: [6, 2, 3], btn: 'b', art: 'special2', win: 18 }
+      ]
     },
     {
       id: 'nina', name: 'Nina', spitzname: 'La Chispa',
@@ -97,8 +120,14 @@
           dash: 128, cancel: 'special' },
         special: { name: 'Sonnenball', dmg: 13, startup: 10, active: 10, recovery: 15, knock: 13.6, reach: 224, high: 64,
           projectile: true, proj: { typ: 'ball', vx: 14, life: 58, scale: 1 } },
+        special2: { name: 'Funkenritt', dmg: 9, startup: 5, active: 4, recovery: 12, knock: 12, reach: 120, high: 40,
+          dash: 96, low: true },
         air: { name: 'Slide-Kick', dmg: 6, startup: 4, active: 5, recovery: 10, knock: 8.8, reach: 104, high: 40, low: true }
-      }
+      },
+      motions: [
+        { hint: '↓↘→+A', name: 'Sonnenball', seq: [2, 3, 6], alt: [2, 6], btn: 'a', art: 'special', win: 22, altWin: 14 },
+        { hint: '↓↙←+B', name: 'Funkenritt', seq: [2, 1, 4], alt: [2, 4], btn: 'b', art: 'special2', win: 22, altWin: 14 }
+      ]
     }
   ];
 

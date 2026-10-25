@@ -1,9 +1,9 @@
 {
   "name": "plaza-kampf",
-  "version": "3.9.0",
+  "version": "4.0.0",
   "private": true,
   "description": "Plaza-Kampf — Street-Fighter-Style 2P für GitHub Pages",
   "scripts": {
-    "test": "node tests/kampf.test.js && node tests/ki.test.js && node tests/netz.test.js && node tests/netz-regression.test.js && node tests/ui-keys.test.js && node tests/smoke-kampf.test.js && node tests/input-regression.test.js && node tests/solo-puppeteer.test.js && node tests/mobile-touch.test.js && node tests/audio-smoke.test.js && node tests/perf-budget.test.js && node tests/ux-smoke.test.js && node tests/weather.test.js && node tests/parallax.test.js && node tests/levels.test.js && node tests/level-fx.test.js && node tests/swap-seat.test.js && node tests/rc-smoke.test.js && node tests/backwalk-pause.test.js && node tests/interp.test.js"
+    "test": "node tests/kampf.test.js && node tests/ki.test.js && node tests/netz.test.js && node tests/netz-regression.test.js && node tests/ui-keys.test.js && node tests/smoke-kampf.test.js && node tests/input-regression.test.js && node tests/solo-puppeteer.test.js && node tests/mobile-touch.test.js && node tests/audio-smoke.test.js && node tests/perf-budget.test.js && node tests/ux-smoke.test.js && node tests/weather.test.js && node tests/parallax.test.js && node tests/levels.test.js && node tests/level-fx.test.js && node tests/swap-seat.test.js && node tests/rc-smoke.test.js && node tests/backwalk-pause.test.js && node tests/interp.test.js && node tests/specials.test.js"
   }
 }

@@ -1,4 +1,4 @@
-/* Pixel-Canvas v3.9: Landscape Overlay (Arena/Chars unverändert). */
+/* Pixel-Canvas v4.0: Landscape Overlay, Motion-VFX, Kombi-Hinweis. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -1169,7 +1169,7 @@
     nina:  { hw: 36, hh: 34, tw: 50, lw: 16, lg: 50, boot: 18 }
   };
   // Moves, die als Tritt (Bein statt Arm) gezeichnet werden
-  var FIG_KICK = { lola: { heavy: 1, air: 1 }, nina: { heavy: 1, air: 1 } };
+  var FIG_KICK = { lola: { heavy: 1, air: 1, special2: 1 }, nina: { heavy: 1, air: 1, special2: 1 } };
   var FIG_TRAIL = { biel: '#5ec8b8', lola: '#ff5a70', toni: '#ff4a18', rocco: '#a070e0', nina: '#ffe080' };
   // v1.5: Snapshot hat kein vy -> pro Spieler aus y-Differenz schätzen (nur Zahlen, keine Allokation)
   var FIG_PY = [0, 0], FIG_PT = [-1, -1], FIG_VY = [0, 0];
@@ -1222,7 +1222,7 @@
     var kick = !!(mv && FIG_KICK[id] && FIG_KICK[id][art]);
     var impact = !!(mv && phase === 'hit' && atkF === mv.startup);   // 1 Tick Stretch
     // Gewicht pro Move: Light schnell, Heavy schwer, Special theatralisch
-    var wt = !mv ? 0 : (art === 'special' ? 3 : (art === 'heavy' ? 2 : 1));
+    var wt = !mv ? 0 : ((art === 'special' || art === 'special2') ? 3 : (art === 'heavy' ? 2 : 1));
     var moving = Math.abs(p.vx || 0) > 0.6 && !air && !crouch && !mv && !stun;
     // Walk: lokale Vorwärts-Position -> Rückwärtslauf spielt den Zyklus korrekt rückwärts
     var walk = moving ? ((Math.floor(x * f / 12) % 6) + 6) % 6 : 0;
@@ -2403,6 +2403,16 @@
         }
         if (!a.grounded && b.grounded) spawnFx('dust', b.x, BODEN, '#5a3020');
         if (a.grounded && !b.grounded) spawnFx('dust', b.x, BODEN, '#3a2010');
+        var artNow = (b.atk && b.atk.art) || '';
+        if ((artNow === 'special' || artNow === 'special2') && artNow !== (a.art || '')) {
+          var colS = Plaza.Chars.finde(b.charId).accent || '#ffb040';
+          var dirS = b.facing > 0 ? 1 : -1;
+          spawnFx('shock', b.x, BODEN, colS);
+          spawnFx('fireball', b.x + dirS * 40, b.y - 78, colS);
+          spawnFx('spark', b.x, b.y - 96, '#fff6c0');
+          spawnFx('spark', b.x + dirS * 22, b.y - 64, colS);
+          flash[i] = 8;
+        }
         // Track hitSeq in prev
         a.hitSeq = b.hitSeq; a.hitKind = b.hitKind;
       }
@@ -2410,7 +2420,8 @@
     prevSnap = {
       p: snap.p.map(function (p) {
         return { hp: p.hp, grounded: p.grounded, x: p.x, y: p.y, charId: p.charId,
-          hitSeq: p.hitSeq | 0, hitKind: p.hitKind || '' };
+          hitSeq: p.hitSeq | 0, hitKind: p.hitKind || '',
+          art: (p.atk && p.atk.art) || '', facing: p.facing || 1 };
       })
     };
   }
@@ -2960,6 +2971,7 @@
       if (hudCdPop > 0) hudCdPop--;
       text(ctx, cdT, 160, true, ['#fff0c0', '#ff9a38'], '#000', W >> 1, (H >> 1) + 32, 'center', 1 + hudCdPop * 0.025);
       text(ctx, 'A leicht · B schwer · C special · ▼ duck', 28, false, '#ffe080', '#000', W >> 1, (H >> 1) + 88, 'center');
+      text(ctx, 'Kombi: ↓↘→ + A   ·   → = vorwärts', 26, false, '#fff0c0', '#000', W >> 1, (H >> 1) + 124, 'center');
     } else hudCd = null;
 
     // Combo: pro Spieler unter dem eigenen Balken, Zahl poppt bei jedem neuen Treffer
@@ -2975,12 +2987,23 @@
       var cd = cp.comboDmg | 0;
       text(ctx, cp.name + (cd ? (' · ' + cd + ' DMG') : ''), 26, true, '#ffe080', '#000', cx, 216, rechts ? 'right' : 'left');
     }
-    // Special-Callout
+    // Special-Callout + Motion-Name (bn/bt kommt aus der Sim, Host setzt ihn nur bei echter Kombi/C)
+    var bannerY = 168;
     for (var si = 0; si < snap.p.length; si++) {
-      if (snap.p[si].hitKind === 'special' && snap.phase === 'kampf' && (tick % 20) < 12) {
-        text(ctx, 'SPECIAL!', 48, true, ['#e0f8ff', '#40b8ff'], '#000', W >> 1, 186, 'center');
-        break;
+      var spc = snap.p[si];
+      if (spc.bt > 0 && spc.bn && snap.phase === 'kampf') {
+        var scB = spc.bt > 40 ? 1.12 : 1;
+        text(ctx, spc.bn, 46, true, ['#fff6c0', '#ffb020'], '#000', W >> 1, bannerY, 'center', scB);
+        bannerY += 44;
+      } else if (spc.hitKind === 'special' && snap.phase === 'kampf' && (tick % 20) < 12) {
+        text(ctx, 'SPECIAL!', 48, true, ['#e0f8ff', '#40b8ff'], '#000', W >> 1, bannerY, 'center');
+        bannerY += 44;
       }
+    }
+    if ((ich === 0 || ich === 1) && snap.p[ich] && snap.phase === 'kampf' && tick > 0 && tick < 220) {
+      var hintC = Plaza.Chars.finde(snap.p[ich].charId);
+      var hintS = (hintC.motions || []).map(function (m) { return m.hint + ' ' + m.name; }).join('   ·   ');
+      if (hintS) text(ctx, hintS + '   (→ vorwärts)', 22, false, 'rgba(255,224,128,0.95)', '#000', W >> 1, H - 28, 'center');
     }
 
     if (snap.phase === 'ende') {

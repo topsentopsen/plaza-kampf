@@ -3,7 +3,7 @@
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION_Q = '3.9';
+  var VERSION_Q = '4.0';
 
   var MQTT_URLS = [
     'wss://broker.emqx.io:8084/mqtt',

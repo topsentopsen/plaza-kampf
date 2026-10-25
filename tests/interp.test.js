@@ -1,4 +1,4 @@
-/* v3.9: Snapshot-Interpolation */
+/* v4.0: Snapshot-Interpolation */
 'use strict';
 var assert = require('assert');
 var fs = require('fs');
@@ -64,10 +64,10 @@ buf.reset();
 assert.equal(buf.sample(), null);
 
 var html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-assert.ok(html.indexOf('js/interp.js?v=3.9') !== -1, 'interp script tag');
+assert.ok(html.indexOf('js/interp.js?v=4.0') !== -1, 'interp script tag');
 var main = fs.readFileSync(path.join(root, 'js/main.js'), 'utf8');
 assert.ok(main.indexOf('snapInterp') !== -1 && main.indexOf('pushInterp') !== -1);
-assert.ok(/VERSION = 'v3\.9'/.test(main));
+assert.ok(/VERSION = 'v4\.0'/.test(main));
 assert.ok(main.indexOf('jeden Sim-Tick') !== -1 || main.indexOf('broadcast()') !== -1);
 
 // rematch rewind must accept new low tick
@@ -77,5 +77,36 @@ buf2.push({ tick: 500, phase: 'ende', p: [{ x: 1, y: 1, vx: 0 }], projektil: [] 
 ctx._now = 2050;
 buf2.push({ tick: 1, phase: 'countdown', countdown: 3, p: [{ x: 100, y: 1, vx: 0 }], projektil: [] });
 assert.equal(buf2.latest().tick, 1, 'rematch rewind');
+
+// Burst: drei Ticks in 2 ms dürfen den Gast nicht ans Ende teleportieren.
+ctx._now = 3000;
+var burst = Plaza.Interp.erstelle({ delayMs: 50 });
+function snapAt(tick, x) {
+  return {
+    tick: tick, phase: 'kampf', countdown: 0, zeit: 90,
+    sieger: null, endeTimer: 0, nachricht: '',
+    p: [{ id: 0, charId: 'biel', name: 'A', x: x, y: 600, facing: 1, grounded: true,
+      hp: 100, maxHp: 100, stun: 0, atk: null, invuln: 0, crouch: false, blk: false,
+      hitSeq: 0, hitKind: '', combo: 0, comboDmg: 0, vx: 10, vy: 0, af: 0 }],
+    projektil: []
+  };
+}
+burst.push(snapAt(30, 0));
+ctx._now = 3001;
+burst.push(snapAt(31, 20));
+ctx._now = 3002;
+burst.push(snapAt(32, 40));
+var early = burst.sample(3002);
+assert.ok(early.p[0].x < 5, 'burst hält am Pufferanfang, x=' + early.p[0].x);
+var later = burst.sample(3068);
+assert.ok(later.p[0].x > early.p[0].x && later.p[0].x < 30, 'burst entzerrt statt ans Ende zu springen, x=' + later.p[0].x);
+
+// Projektile gleicher Liste per id, nicht per Index
+var pa = snapAt(1, 0);
+pa.projektil = [{ i: 7, x: 10, y: 20, vx: 4, vy: 0, w: 8, h: 8, owner: 0, typ: 'ball' }];
+var pb = snapAt(2, 0);
+pb.projektil = [{ i: 7, x: 30, y: 20, vx: 4, vy: 0, w: 8, h: 8, owner: 0, typ: 'ball' }];
+var pm = Plaza.Interp.lerpSnap(pa, pb, 0.5);
+assert.ok(Math.abs(pm.projektil[0].x - 20) < 0.01, 'proj lerp by id');
 
 console.log('ok — interp.test.js');

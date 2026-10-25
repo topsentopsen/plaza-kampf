@@ -1,4 +1,5 @@
-/* Autoritative Kampfsimulation (Host). v3.9: Backwalk in Block-Stance. */
+/* Autoritative Kampfsimulation (Host). v4.0: feste Motion-Specials, Backwalk bleibt.
+   Kombis liest nur der Host aus dem Input-Strom (l/r/u/d/a/b/c). Kein Client-Flag „special“. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -18,6 +19,8 @@
       bufA: 0, bufB: 0, bufC: 0, comboDmg: 0,
       invuln: 0, combo: 0, armorLeft: 0,
       hitSeq: 0, hitKind: '',
+      bn: '', bt: 0,
+      mot: [], _dir: 5,
       input: { l: false, r: false, u: false, d: false, a: false, b: false, c: false },
       prev: { a: false, b: false, c: false, u: false, d: false }
     };
@@ -39,6 +42,7 @@
       countdown: 3, zeit: ROUND_ZEIT,
       p: [a, b],
       projektil: [],
+      _pid: 1,
       sieger: null, endeTimer: 0,
       nachricht: 'Kampf!'
     };
@@ -63,9 +67,9 @@
     return taste === 'a' ? 'light' : taste === 'b' ? 'heavy' : 'special';
   }
 
-  function startAtk(p, art) {
+  function startAtk(p, art, force) {
     if (p.atk || p.stun > 0) return;
-    if (p.blocking) return;
+    if (p.blocking && !force) return;
     var c = Plaza.Chars.finde(p.charId);
     var m = c.moves[art];
     if (!m) {
@@ -74,11 +78,97 @@
       if (!m) return;
       art = 'light';
     }
+    if (force) p.blocking = false;
     p.atk = { art: art, m: m };
     p.atkFrame = 0;
     p.hitDone = false;
     p.hitCount = 0;
     p.armorLeft = (m.armor && m.armor.hits) || (m.armor ? 1 : 0);
+    if (art === 'special' || art === 'special2') {
+      p.bn = m.name || 'Special';
+      p.bt = 50;
+    }
+  }
+
+  /** Blickrelative Numpad-Note: 6 vor, 4 zurück, 2 unten, 3 unten-vor, 1 unten-zurück. */
+  function dirCode(p) {
+    var inp = p.input || {};
+    var fwd = p.facing > 0 ? !!inp.r : !!inp.l;
+    var back = p.facing > 0 ? !!inp.l : !!inp.r;
+    if (fwd && back) { fwd = false; back = false; }
+    var down = !!inp.d, up = !!inp.u;
+    if (down && up) { down = false; up = false; }
+    if (down && back) return 1;
+    if (down && fwd) return 3;
+    if (down) return 2;
+    if (up && back) return 7;
+    if (up && fwd) return 9;
+    if (up) return 8;
+    if (back) return 4;
+    if (fwd) return 6;
+    return 5;
+  }
+
+  function noteDir(st, p) {
+    var d = dirCode(p);
+    if (d === p._dir) return;
+    p._dir = d;
+    if (d === 5) return;
+    if (!p.mot) p.mot = [];
+    p.mot.push({ d: d, t: st.tick });
+    if (p.mot.length > 14) p.mot.shift();
+  }
+
+  /**
+   * Sequenz muss in der Historie liegen, die jüngste Richtung ist der letzte Schritt
+   * (Taste während ↓↘→ bzw. →↓↘). Fremde Richtungen dazwischen brechen die Kette.
+   */
+  function motionOk(hist, seq, now, windowTicks) {
+    if (!hist || !hist.length || !seq || !seq.length) return false;
+    var i = hist.length - 1;
+    var end = hist[i];
+    if (!end || now - end.t > windowTicks) return false;
+    if (end.d !== seq[seq.length - 1]) return false;
+    var si = seq.length - 2;
+    var firstT = end.t;
+    for (i = i - 1; i >= 0 && si >= 0; i--) {
+      var h = hist[i];
+      if (now - h.t > windowTicks) return false;
+      if (h.d === seq[si]) {
+        firstT = h.t;
+        si--;
+      } else if (h.d === seq[si + 1]) {
+        /* gleiche Richtung nochmal, zählt nicht neu */
+      } else {
+        return false;
+      }
+    }
+    return si < 0 && (now - firstT) <= windowTicks;
+  }
+
+  function tryMotion(st, p) {
+    if (p.stun > 0 || !p.grounded) return null;
+    var c = Plaza.Chars.finde(p.charId);
+    var list = c.motions || [];
+    if (!list.length || !p.mot || !p.mot.length) return null;
+    if (!(p.bufA > 0 || p.bufB > 0 || p.bufC > 0)) return null;
+    var best = null, i, mv, buf, win, strict, loose, score;
+    for (i = 0; i < list.length; i++) {
+      mv = list[i];
+      buf = mv.btn === 'a' ? p.bufA : mv.btn === 'b' ? p.bufB : p.bufC;
+      if (!(buf > 0)) continue;
+      win = mv.win || 20;
+      strict = motionOk(p.mot, mv.seq, st.tick, win);
+      loose = !strict && mv.alt && motionOk(p.mot, mv.alt, st.tick, mv.altWin || 14);
+      if (!strict && !loose) continue;
+      score = (strict ? 100 : 40) + mv.seq.length;
+      if (!best || score > best.score) best = { art: mv.art, score: score };
+    }
+    if (!best) return null;
+    p.bufA = 0; p.bufB = 0; p.bufC = 0;
+    p.mot = [];
+    p._dir = 5;
+    return best.art;
   }
 
   function hitbox(p) {
@@ -135,7 +225,8 @@
     }
     if (istBlock(ang, opf, m)) {
       // Specials chippen stärker — Block allein reicht nicht
-      var chipMul = (ang.atk && ang.atk.art === 'special') ? 0.22 : 0.12;
+      var spezChip = ang.atk && (ang.atk.art === 'special' || ang.atk.art === 'special2');
+      var chipMul = spezChip ? 0.22 : 0.12;
       var chip = Math.max(1, Math.ceil(m.dmg * chipMul));
       opf.hp = Math.max(0, opf.hp - chip);
       opf.stun = 4; // kürzer — Block fühlt sich reaktiv an
@@ -158,7 +249,8 @@
     opf.crouch = false;
     opf.invuln = m.dmg >= 14 ? 10 : 6;
     opf.hitSeq++;
-    opf.hitKind = m.throw ? 'throw' : ((ang.atk && ang.atk.art === 'special') ? 'special' : (m.dmg >= 14 ? 'heavy' : 'light'));
+    var spezHit = ang.atk && (ang.atk.art === 'special' || ang.atk.art === 'special2');
+    opf.hitKind = m.throw ? 'throw' : (spezHit ? 'special' : (m.dmg >= 14 ? 'heavy' : 'light'));
     opf.combo = 0; // Getroffen → eigene Combo weg
     ang.combo = (ang.combo || 0) + 1;
     ang.comboDmg = (ang.comboDmg || 0) + m.dmg;
@@ -172,6 +264,12 @@
   }
 
   
+  function pushProj(st, pr) {
+    pr.i = st._pid || 1;
+    st._pid = pr.i + 1;
+    st.projektil.push(pr);
+  }
+
   function ext(a, b) {
     var o = {}, k;
     for (k in a) if (Object.prototype.hasOwnProperty.call(a, k)) o[k] = a[k];
@@ -194,7 +292,7 @@
       for (var i = 0; i < angles.length; i++) {
         var ang = angles[i];
         var spd = pr.spd || 9.6;
-        st.projektil.push(ext(base, {
+        pushProj(st, ext(base, {
           x: p.x + p.facing * 56, y: p.y - 72,
           vx: p.facing * Math.cos(ang) * spd,
           vy: Math.sin(ang) * spd,
@@ -204,7 +302,7 @@
       return;
     }
     if (typ === 'bodenwelle') {
-      st.projektil.push(ext(base, {
+      pushProj(st, ext(base, {
         x: p.x + p.facing * 48, y: BODEN - 16,
         vx: p.facing * (pr.vx || 8.8), vy: 0,
         w: 56, h: 32, life: pr.life || 28, low: true
@@ -213,7 +311,7 @@
     }
     // Standard-Ball / ladbarer Sonnenball
     var scale = pr.scale || 1;
-    st.projektil.push(ext(base, {
+    pushProj(st, ext(base, {
       x: p.x + p.facing * 64, y: p.y - 72,
       vx: p.facing * (pr.vx || 12.8) * scale,
       vy: pr.vy || 0,
@@ -226,6 +324,8 @@
   function updateSpieler(st, p, dt) {
     var c = Plaza.Chars.finde(p.charId);
     var inp = p.input;
+    noteDir(st, p);
+    if (p.bt > 0) p.bt--;
     // v2.2: Buffer während Stun einfrieren (Wakeup-Buffer)
     if (p.stun <= 0) {
       if (p.bufA > 0) p.bufA--;
@@ -249,13 +349,19 @@
       p.crouch = false;
     }
 
+    var mot = null;
+    if (p.stun <= 0 && !p.atk && p.grounded) mot = tryMotion(st, p);
+    if (mot) { p.blocking = false; p.crouch = false; }
+
     if (p.stun > 0) {
       p.stun--;
       p.vx *= 0.85;
     } else if (!p.atk) {
       var dir = (inp.r ? 1 : 0) - (inp.l ? 1 : 0);
-      // Block-Stance (weg vom Gegner): Rückwärtslaufen wie SF, kein Facing-Flip
-      if (p.blocking) {
+      // Motion-Start: nicht in den Block-Rückwärtslauf kippen und nicht das Facing drehen
+      if (mot) {
+        p.vx *= 0.6;
+      } else if (p.blocking) {
         var away = p.facing > 0 ? -1 : 1;
         if (dir === away) {
           p.vx = dir * c.speed * (p.crouch ? 0.35 : 1);
@@ -276,8 +382,10 @@
         p.vy = -c.jump;
         p.grounded = false;
       }
-      // Cancel / Attacken mit Input-Buffer
-      if (p._cancel && p.bufC > 0) {
+      // Cancel / Attacken mit Input-Buffer. Motion vor der normalen Taste — Host prüft die Sequenz.
+      if (mot) {
+        startAtk(p, mot, true);
+      } else if (p._cancel && p.bufC > 0) {
         p._cancel = null; p.bufC = 0;
         startAtk(p, 'special');
       } else if (p.bufA > 0) { p.bufA = 0; startAtk(p, moveArt(p, 'a')); }
@@ -290,12 +398,14 @@
       if (m0.dash && p.atkFrame >= m0.startup && p.atkFrame < m0.startup + m0.active) {
         p.vx = p.facing * (m0.dash / Math.max(1, m0.active));
       }
-      // Cancel on hit
-      if (p._cancel && p.bufC > 0) {
-        var cancelTo = p._cancel;
+      // Cancel on hit — C oder eine passende Motion (Host validiert die Sequenz)
+      var motC = null;
+      if (p._cancel && p.stun <= 0 && p.grounded) motC = tryMotion(st, p);
+      if (p._cancel && (motC || p.bufC > 0)) {
+        var cancelTo = motC || p._cancel;
         p._cancel = null; p.bufC = 0;
         p.atk = null;
-        startAtk(p, cancelTo);
+        startAtk(p, cancelTo, !!motC);
       }
     }
 
@@ -441,7 +551,11 @@
       tick: st.tick, phase: st.phase, countdown: st.countdown, zeit: st.zeit,
       sieger: st.sieger, endeTimer: st.endeTimer, nachricht: st.nachricht,
       projektil: st.projektil.map(function (p) {
-        return { x: p.x, y: p.y, w: p.w, h: p.h, farbe: p.farbe, owner: p.owner, typ: p.typ || 'ball' };
+        return {
+          i: p.i | 0, x: p.x, y: p.y,
+          vx: Math.round((p.vx || 0) * 10) / 10, vy: Math.round((p.vy || 0) * 10) / 10,
+          w: p.w, h: p.h, farbe: p.farbe, owner: p.owner, typ: p.typ || 'ball'
+        };
       }),
       p: st.p.map(function (p) {
         return {
@@ -455,7 +569,10 @@
           hitSeq: p.hitSeq | 0, hitKind: p.hitKind || '',
           combo: p.combo | 0, comboDmg: p.comboDmg | 0,
           vx: Math.round((p.vx || 0) * 10) / 10,
-          af: p.atk ? (p.atkFrame | 0) : 0
+          vy: Math.round((p.vy || 0) * 10) / 10,
+          af: p.atk ? (p.atkFrame | 0) : 0,
+          bn: p.bt > 0 ? (p.bn || '') : '',
+          bt: p.bt | 0
         };
       })
     };
@@ -468,6 +585,6 @@
   Plaza.Kampf = {
     ARENA_W: ARENA_W, ARENA_H: ARENA_H, BODEN: BODEN,
     neu: neu, setInput: setInput, tick: tick, snapshot: snapshot, rematch: rematch,
-    hitbox: hitbox, atkBox: atkBox
+    hitbox: hitbox, atkBox: atkBox, motionOk: motionOk, dirCode: dirCode
   };
 })(typeof window !== 'undefined' ? window : globalThis);

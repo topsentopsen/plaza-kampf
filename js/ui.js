@@ -1,4 +1,4 @@
-/* Menü, Charakterwahl, Touch-Steuerung. v3.9 — Pause-Taste + Abbruch. */
+/* Menü, Charakterwahl, Touch-Steuerung. v4.0 — Pause-Taste + Kombi-Hinweis. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
@@ -104,6 +104,7 @@
           return s;
         }
         var ml = c.moves.light, mh = c.moves.heavy, ms = c.moves.special;
+        var motLine = (c.motions || []).map(function (m) { return m.hint + ' ' + m.name; }).join(' · ');
         b.innerHTML = '<canvas class="char-port" width="144" height="144" aria-hidden="true"></canvas>' +
           '<span class="swatch" style="background:' + c.farbe + '"></span>' +
           '<strong>' + c.name + '</strong>' +
@@ -114,6 +115,7 @@
             '<b>A</b> ' + ml.name + ' (' + ml.dmg + ') · ' +
             '<b>B</b> ' + mh.name + ' (' + mh.dmg + ') · ' +
             '<b>C</b> ' + ms.name + ' (' + ms.dmg + ')' +
+            (motLine ? '<br>' + motLine : '') +
           '</small>';
         if (selId === c.id) b.classList.add('aktiv');
         b.addEventListener('click', function () {

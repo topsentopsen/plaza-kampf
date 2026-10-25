@@ -1,8 +1,8 @@
-/* Einstieg, Spielschleife, Host/Client-Logik. v3.9 — Gast-Interpolation + 60Hz State. */
+/* Einstieg, Spielschleife, Host/Client-Logik. v4.0 — Tick-Playback, Praxis-KI, Motion-Specials. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION = 'v3.9';
+  var VERSION = 'v4.0';
   Plaza.VERSION = VERSION;
   function sanitizeName(n) {
     n = String(n == null ? '' : n).replace(/[\u0000-\u001f<>]/g, '').trim();
@@ -42,7 +42,7 @@
     var kampf = null;
     var letzterSnap = null;
     var snapInterp = (Plaza.Interp && Plaza.Interp.erstelle)
-      ? Plaza.Interp.erstelle({ delayMs: 40 })
+      ? Plaza.Interp.erstelle({ delayMs: 50 })
       : null;
     function resetInterp() {
       if (snapInterp) snapInterp.reset();
@@ -373,7 +373,7 @@
         ui.showScreen('menue');
         ui.setStatus('');
         if (ui.setPauseBtn) ui.setPauseBtn(false);
-        Plaza.Render.menueHint(render, 'Versus · Solo · v3.9');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v4.0');
       },
       onPause: function () {
         if (mode !== 'kampf' && mode !== 'ende') return;
@@ -416,7 +416,7 @@
         ui.showScreen('menue');
         ui.setStatus('Kampf abgebrochen.');
         if (ui.setPauseBtn) ui.setPauseBtn(false);
-        Plaza.Render.menueHint(render, 'Versus · Solo · v3.9');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v4.0');
       },
       onHost: function () {
         soloMode = false;
@@ -842,7 +842,7 @@
           var cpu = kampf.p[1];
           var stunBefore = cpu ? cpu.stun : 0;
           var cpuInp = Plaza.KI
-            ? Plaza.KI.denk(kampf, 1, { aggressiv: 0.5, dummy: false })
+            ? Plaza.KI.denk(kampf, 1, { aggressiv: Plaza.KI.PRAXIS || 0.84, praxis: true, dummy: false })
             : { l: false, r: false, u: false, d: false, a: false, b: false, c: false };
           Plaza.Kampf.setInput(kampf, 0, lokalInput);
           Plaza.Kampf.setInput(kampf, 1, cpuInp);
@@ -882,12 +882,13 @@
             if (phaseVorher !== 'ende' || (kampf.endeTimer % 12) === 0) broadcast();
             phaseVorher = 'ende';
           } else {
-            // v3.9: jeden Sim-Tick (~60 Hz) — Payload ~0.6 KB, Gast interpoliert trotzdem
+            // v4.0: jeden Sim-Tick (~60 Hz). Gast spielt die Ticks mit festem Takt ab,
+            // auch wenn die Pakete im selben Frame gebündelt ankommen.
             broadcast();
           }
         }
         letzterSnap = Plaza.Kampf.snapshot(kampf);
-        if (!tabHidden) { Plaza.Render.zeichne(render, letzterSnap, 0); framesDrawn++; } else { framesSkipped++; }
+        if (!tabHidden) { Plaza.Render.zeichne(render, letzterSnap, seite); framesDrawn++; } else { framesSkipped++; }
         if (netDown && Plaza.Render.banner) Plaza.Render.banner(render, 'VERBINDUNG WEG — Nochmal');
         if (letzterSnap.phase === 'ende') {
           if (mode !== 'ende') {
@@ -906,9 +907,8 @@
       } else if ((mode === 'kampf' || mode === 'ende') && letzterSnap) {
         // Gast: Input-HB dichter (Paketverlust → sonst sticky keys)
         if (mode === 'kampf' && netz && !netz.istHost() && netz.istBereit()) {
-          if ((framesDrawn % 3) === 0) {
-            netz.sende({ typ: 'input', seite: seite, input: lokalInput });
-          }
+          // v4.0: jeden Frame — Motion-Inputs (↓↘→) dürfen nicht auf 20 Hz zusammenfallen
+          netz.sende({ typ: 'input', seite: seite, input: lokalInput });
         }
         var view = (!netz.istHost() && !soloMode && mode === 'kampf')
           ? (drawSnap(now) || letzterSnap)
@@ -928,7 +928,7 @@
         }
         acc = 0;
       } else if (mode === 'menue') {
-        Plaza.Render.menueHint(render, 'Versus · Solo · v3.9');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v4.0');
         acc = 0;
       } else {
         Plaza.Render.menueHint(render, statusElText());
@@ -969,7 +969,7 @@
     document.addEventListener('webkitfullscreenchange', function () { updateFsButton(); _skKey = ''; skalieren(); });
     skalieren();
     if ('serviceWorker' in navigator) {
-      try { navigator.serviceWorker.register('sw.js?v=3.9'); } catch (eSw) {}
+      try { navigator.serviceWorker.register('sw.js?v=4.0'); } catch (eSw) {}
     }
     requestAnimationFrame(loop);
   }
