@@ -1,8 +1,9 @@
-/* Client-Snapshot-Interpolation v4.0 — Wiedergabe nach Sim-Tick, nicht nach Paket-Lücken.
-   v3.9 hat zwischen Ankunftszeiten gelinpt. MQTT/rAF bündelt oft 2–3 Ticks in 1 ms,
-   der Gast sprang dann und wartete: der Host (lokal 60 Hz) blieb glatt, der Gast ruckelte.
-   Jetzt läuft ein Playback-Tick mit ~60 Hz; der Puffer glättet Jitter. Diskrete Flags
-   (Pose, Block, HP) wechseln in der Mitte des Intervalls, Positionen laufen linear. */
+/* Client-Snapshot-Interpolation v4.1 — keine Einzelframe-Sprünge.
+   v4.0 spielte schon im Sim-Takt, warf den Playhead aber bei einem tiefen Puffer
+   in einem Frame nach vorn (Burst) und extrapolierte bei Unterlauf mit vx über
+   das letzte Snapshot hinaus (ein Frame zu weit, danach zurück). Pose/Facing/Atk
+   sprangen außerdem bei t=0.5 mitten im Intervall. Jetzt: Playhead nur stetig,
+   bei Unterlauf stehenbleiben, Diskretes erst am Tick-Rand, veraltete Ticks verwerfen. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza || (g.Plaza = {});
@@ -23,7 +24,8 @@
   }
 
   function discOf(a, b, t) {
-    return t >= 0.5 ? b : a;
+    // Erst am Tick-Rand wechseln — nicht bei t=0.5, sonst ein Pose-Frame mitten in der Bewegung.
+    return t >= 1 ? b : a;
   }
 
   function findProj(list, bp) {
@@ -48,16 +50,22 @@
     if (!b) return a;
     t = clamp01(t);
     var out = {
-      tick: b.tick,
       phase: b.phase,
       countdown: b.countdown,
       zeit: b.zeit,
       sieger: b.sieger,
       endeTimer: b.endeTimer,
       nachricht: b.nachricht,
+      tick: t >= 1 ? b.tick : a.tick,
       p: (b.p || []).map(function (bp, i) {
         var ap = (a.p && a.p[i]) || bp;
         var disc = discOf(ap, bp, t);
+        var atk = disc.atk || null;
+        var af = disc.af || 0;
+        if (ap.atk && bp.atk && ap.atk.art === bp.atk.art) {
+          af = lerp(ap.atk.frame || ap.af || 0, bp.atk.frame || bp.af || 0, t);
+          atk = { art: ap.atk.art, frame: af };
+        }
         return {
           id: bp.id, charId: bp.charId, name: bp.name,
           x: lerp(ap.x, bp.x, t),
@@ -65,27 +73,47 @@
           facing: disc.facing,
           grounded: disc.grounded,
           hp: disc.hp, maxHp: disc.maxHp, stun: disc.stun,
-          atk: disc.atk, invuln: disc.invuln,
+          atk: atk, invuln: disc.invuln,
           crouch: disc.crouch, blk: disc.blk,
           hitSeq: disc.hitSeq, hitKind: disc.hitKind,
           combo: disc.combo, comboDmg: disc.comboDmg,
           vx: lerp(ap.vx || 0, bp.vx || 0, t),
           vy: lerp(ap.vy || 0, bp.vy || 0, t),
-          af: disc.af,
+          af: af,
           bn: disc.bn || '',
           bt: disc.bt || 0
         };
       }),
-      projektil: (b.projektil || []).map(function (bp) {
-        var ap = findProj(a.projektil, bp);
-        if (!ap) return bp;
-        return {
-          i: bp.i, x: lerp(ap.x, bp.x, t), y: lerp(ap.y, bp.y, t),
-          vx: bp.vx, vy: bp.vy,
-          w: bp.w, h: bp.h, farbe: bp.farbe, owner: bp.owner, typ: bp.typ
-        };
-      })
+      projektil: lerpProjectiles(a.projektil, b.projektil, t)
     };
+    return out;
+  }
+
+  function lerpProjectiles(aList, bList, t) {
+    var out = [];
+    var i, bp, ap;
+    aList = aList || [];
+    bList = bList || [];
+    for (i = 0; i < bList.length; i++) {
+      bp = bList[i];
+      ap = findProj(aList, bp);
+      if (!ap) {
+        // Neues Projektil erst am Tick-Rand — nicht eine Frame lang an der Zukunftsposition.
+        if (t >= 1) out.push(bp);
+        continue;
+      }
+      out.push({
+        i: bp.i, x: lerp(ap.x, bp.x, t), y: lerp(ap.y, bp.y, t),
+        vx: bp.vx, vy: bp.vy,
+        w: bp.w, h: bp.h, farbe: bp.farbe, owner: bp.owner, typ: bp.typ
+      });
+    }
+    if (t < 1) {
+      for (i = 0; i < aList.length; i++) {
+        ap = aList[i];
+        if (!findProj(bList, ap)) out.push(ap);
+      }
+    }
     return out;
   }
 
@@ -137,14 +165,22 @@
       return Math.max(1, delayMs * (60 / 1000));
     }
 
+    function trim() {
+      // Nur Frames hinter dem Playhead wegwerfen. Ein Burst bleibt liegen,
+      // sonst springt die Figur in einem Frame auf den neuesten Tick.
+      var guard = playTick == null ? -1e9 : playTick - 1;
+      while (buf.length > MAX && buf[0].tick < guard) buf.shift();
+    }
+
     function push(snap) {
       if (!snap || typeof snap !== 'object') return;
       var t = now();
       if (buf.length) {
         var last = buf[buf.length - 1];
         if (typeof snap.tick === 'number' && typeof last.tick === 'number' && snap.tick < last.tick) {
-          var rematch = snap.phase === 'countdown' || snap.tick < 10 || (last.tick - snap.tick) > 45;
-          if (rematch) {
+          // Nur ein echter Rematch (Countdown) leert den Puffer.
+          // Veraltete / out-of-order Ticks im laufenden Kampf verwerfen — nicht eine Frame lang anzeigen.
+          if (snap.phase === 'countdown') {
             buf = [];
             playTick = null;
             lastT = null;
@@ -155,7 +191,7 @@
       }
       if (buf.length && buf[buf.length - 1].tick === snap.tick) buf[buf.length - 1] = snap;
       else buf.push(snap);
-      if (buf.length > MAX) buf.splice(0, buf.length - MAX);
+      trim();
       if (lastT == null) lastT = t;
       if (playTick == null) playTick = snap.tick - delayTicks();
     }
@@ -185,26 +221,29 @@
       var latestSnap = buf[buf.length - 1];
       var dt = takeDt(t);
       if (latestSnap.phase === 'ende' || latestSnap.phase === 'countdown') {
-        playTick = latestSnap.tick;
+        // Zahl sofort zeigen, Uhr aber hinter dem Tick lassen (Kampf startet mit Puffer, nicht am Rand).
+        playTick = latestSnap.tick - delayTicks();
         return latestSnap;
       }
       if (playTick == null) playTick = latestSnap.tick - delayTicks();
-      var newest = latestSnap.tick;
-      if (newest - playTick > 18) playTick = newest - delayTicks();
-      var want = delayTicks();
-      var depth = newest - playTick;
-      var speed = 1;
-      if (depth > want + 1.5) speed = 1.06;
-      else if (depth < want - 1.2) speed = 0.94;
-      playTick += dt * (60 / 1000) * speed;
-      if (playTick > newest + 3) playTick = newest + 3;
 
-      if (playTick >= newest) {
-        var over = (playTick - newest) * (1000 / 60);
-        if (over > 0.5 && latestSnap.phase === 'kampf') return extrapolate(latestSnap, over);
-        return latestSnap;
+      var newest = latestSnap.tick;
+      var want = delayTicks();
+      // dt ist oben auf 50 ms gedeckelt (~3 Ticks). Kein zusätzlicher Hard-Snap:
+      // ein tiefer Puffer holt nur Bruchteile eines Ticks auf, nie in einem Frame zum Ziel.
+      var step = dt * (60 / 1000);
+      playTick += step;
+      var depth = newest - playTick;
+      if (depth > want + 2) playTick += Math.min(0.35, depth - want);
+      // Unterlauf: stehenbleiben. Nicht mit vx über das letzte Snapshot hinausschießen.
+      if (playTick > newest) playTick = newest;
+      if (playTick < buf[0].tick) {
+        var hole = buf[0].tick - playTick;
+        playTick += hole > 2 ? 1 : hole;
       }
-      if (playTick <= buf[0].tick) return buf[0];
+
+      if (playTick >= newest - 1e-4) return latestSnap;
+      if (playTick <= buf[0].tick + 1e-4) return buf[0];
 
       var older = buf[0], newer = latestSnap, i, span, alpha;
       for (i = 0; i < buf.length - 1; i++) {

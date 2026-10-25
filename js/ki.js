@@ -1,4 +1,4 @@
-/* Trainings-CPU / Solo-KI. v4.0 — Praxis-Gegner: härter, kombiert, wirft öfter Specials.
+/* Trainings-CPU / Solo-KI. v4.1 — Praxis-Gegner: härter, kombiert, wirft öfter Specials.
    Kein Ein-Treffer-Kill: Schaden bleibt der der Moves, die CPU spielt nur gemeiner. */
 (function (g) {
   'use strict';

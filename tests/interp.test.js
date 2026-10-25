@@ -1,4 +1,4 @@
-/* v4.0: Snapshot-Interpolation */
+/* v4.1: Snapshot-Interpolation, keine Einzelframe-Sprünge */
 'use strict';
 var assert = require('assert');
 var fs = require('fs');
@@ -33,8 +33,19 @@ b.p[0].atk = { art: 'punch', frame: 2 };
 
 var mid = Plaza.Interp.lerpSnap(a, b, 0.5);
 assert.ok(Math.abs(mid.p[0].x - 120) < 0.01, 'lerp x mid');
-assert.ok(mid.p[0].atk && mid.p[0].atk.art === 'punch', 'discrete from newer');
-assert.equal(mid.tick, 12);
+assert.ok(!mid.p[0].atk, 'pose bleibt bis zum Tick-Rand auf dem älteren Snap');
+assert.equal(mid.tick, 10, 'tick bleibt bis t=1 der ältere');
+assert.equal(mid.p[0].facing, 1);
+var edge = Plaza.Interp.lerpSnap(a, b, 1);
+assert.ok(edge.p[0].atk && edge.p[0].atk.art === 'punch', 'pose am Tick-Rand');
+assert.equal(edge.tick, 12);
+var aAtk = JSON.parse(JSON.stringify(a));
+var bAtk = JSON.parse(JSON.stringify(b));
+aAtk.p[0].atk = { art: 'punch', frame: 0 };
+bAtk.p[0].atk = { art: 'punch', frame: 4 };
+var midAtk = Plaza.Interp.lerpSnap(aAtk, bAtk, 0.5);
+assert.equal(midAtk.p[0].atk.art, 'punch');
+assert.ok(Math.abs(midAtk.p[0].atk.frame - 2) < 0.01, 'gleiche Attacke interpoliert das Frame');
 
 var buf = Plaza.Interp.erstelle({ delayMs: 40 });
 ctx._now = 1000;
@@ -64,11 +75,12 @@ buf.reset();
 assert.equal(buf.sample(), null);
 
 var html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-assert.ok(html.indexOf('js/interp.js?v=4.0') !== -1, 'interp script tag');
+assert.ok(html.indexOf('js/interp.js?v=4.1') !== -1, 'interp script tag');
 var main = fs.readFileSync(path.join(root, 'js/main.js'), 'utf8');
 assert.ok(main.indexOf('snapInterp') !== -1 && main.indexOf('pushInterp') !== -1);
-assert.ok(/VERSION = 'v4\.0'/.test(main));
+assert.ok(/VERSION = 'v4\.1'/.test(main));
 assert.ok(main.indexOf('jeden Sim-Tick') !== -1 || main.indexOf('broadcast()') !== -1);
+assert.ok(main.indexOf('veraltetes Paket') !== -1, 'out-of-order state wird verworfen');
 
 // rematch rewind must accept new low tick
 ctx._now = 2000;
@@ -108,5 +120,56 @@ var pb = snapAt(2, 0);
 pb.projektil = [{ i: 7, x: 30, y: 20, vx: 4, vy: 0, w: 8, h: 8, owner: 0, typ: 'ball' }];
 var pm = Plaza.Interp.lerpSnap(pa, pb, 0.5);
 assert.ok(Math.abs(pm.projektil[0].x - 20) < 0.01, 'proj lerp by id');
+
+// Neues Projektil nicht schon in der Intervallmitte an der Zukunftsposition.
+var pNew = Plaza.Interp.lerpSnap(snapAt(3, 0), (function () {
+  var s = snapAt(4, 0);
+  s.projektil = [{ i: 9, x: 80, y: 20, vx: 12, vy: 0, w: 8, h: 8, owner: 0, typ: 'ball' }];
+  return s;
+})(), 0.5);
+assert.equal(pNew.projektil.length, 0, 'projektil erst am Tick-Rand');
+var pEdge = Plaza.Interp.lerpSnap(snapAt(3, 0), (function () {
+  var s = snapAt(4, 0);
+  s.projektil = [{ i: 9, x: 80, y: 20, vx: 12, vy: 0, w: 8, h: 8, owner: 0, typ: 'ball' }];
+  return s;
+})(), 1);
+assert.equal(pEdge.projektil.length, 1);
+assert.equal(pEdge.projektil[0].x, 80);
+
+// Burst von 15 Ticks in einem Augenblick: der nächste Frame darf nicht ans Ende springen.
+ctx._now = 4000;
+var spike = Plaza.Interp.erstelle({ delayMs: 50 });
+spike.push(snapAt(100, 0));
+var before = spike.sample(4016);
+var i;
+for (i = 1; i <= 15; i++) spike.push(snapAt(100 + i, i * 20));
+var after = spike.sample(4032);
+var dx = Math.abs(after.p[0].x - before.p[0].x);
+assert.ok(dx < 40, 'burst kein Einzelframe-Teleport, dx=' + dx + ' x=' + after.p[0].x);
+assert.ok(after.p[0].x < 80, 'burst bleibt nah am Playhead, x=' + after.p[0].x);
+
+// Unterlauf: nicht mit vx über das letzte Snapshot hinaus, sonst snap-back im nächsten Paket.
+ctx._now = 5000;
+var under = Plaza.Interp.erstelle({ delayMs: 50 });
+under.push(snapAt(10, 2000));
+var maxX = 0;
+var t;
+for (t = 5000; t <= 5200; t += 16) {
+  var us = under.sample(t);
+  if (us.p[0].x > maxX) maxX = us.p[0].x;
+}
+assert.ok(maxX <= 2000.01, 'kein Extrapolieren über den neuesten Stand, x=' + maxX);
+
+// Veralteter Kampftick darf die Position nicht eine Frame lang auf 0 ziehen.
+ctx._now = 6000;
+var stale = Plaza.Interp.erstelle({ delayMs: 50 });
+stale.push(snapAt(100, 500));
+ctx._now = 6016;
+stale.push(snapAt(101, 510));
+ctx._now = 6032;
+stale.push(snapAt(40, 0));
+assert.equal(stale.latest().tick, 101, 'stale tick verworfen');
+var staleView = stale.sample(6048);
+assert.ok(staleView.p[0].x > 400, 'stale tick blitzt nicht auf, x=' + staleView.p[0].x);
 
 console.log('ok — interp.test.js');

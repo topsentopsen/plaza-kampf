@@ -1,4 +1,4 @@
-/* Menü, Charakterwahl, Touch-Steuerung. v4.0 — Pause-Taste + Kombi-Hinweis. */
+/* Menü, Charakterwahl, Touch-Steuerung. v4.1 — Pause-Taste + Kombi-Hinweis. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};

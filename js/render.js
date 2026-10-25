@@ -1,4 +1,4 @@
-/* Pixel-Canvas v4.0: Landscape Overlay, Motion-VFX, Kombi-Hinweis. */
+/* Pixel-Canvas v4.1: Landscape Overlay, Motion-VFX, Kombi-Hinweis. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};

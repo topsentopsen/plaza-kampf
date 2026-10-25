@@ -1,8 +1,8 @@
-/* Einstieg, Spielschleife, Host/Client-Logik. v4.0 — Tick-Playback, Praxis-KI, Motion-Specials. */
+/* Einstieg, Spielschleife, Host/Client-Logik. v4.1 — Tick-Playback, Praxis-KI, Motion-Specials. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION = 'v4.0';
+  var VERSION = 'v4.1';
   Plaza.VERSION = VERSION;
   function sanitizeName(n) {
     n = String(n == null ? '' : n).replace(/[\u0000-\u001f<>]/g, '').trim();
@@ -373,7 +373,7 @@
         ui.showScreen('menue');
         ui.setStatus('');
         if (ui.setPauseBtn) ui.setPauseBtn(false);
-        Plaza.Render.menueHint(render, 'Versus · Solo · v4.0');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v4.1');
       },
       onPause: function () {
         if (mode !== 'kampf' && mode !== 'ende') return;
@@ -416,7 +416,7 @@
         ui.showScreen('menue');
         ui.setStatus('Kampf abgebrochen.');
         if (ui.setPauseBtn) ui.setPauseBtn(false);
-        Plaza.Render.menueHint(render, 'Versus · Solo · v4.0');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v4.1');
       },
       onHost: function () {
         soloMode = false;
@@ -699,26 +699,34 @@
           }
         }
         if (msg.typ === 'state' && !netz.istHost()) {
-          if (msg.level) {
-            applyLevel(msg.level);
-            if (ui.setLevel) ui.setLevel(msg.level);
-          }
-          if (msg.wetter && Plaza.Render && Plaza.Render.applyWetter) Plaza.Render.applyWetter(msg.wetter);
-          letzterSnap = msg.state;
-          pushInterp(msg.state);
-          if (mode !== 'kampf') {
-            mode = 'kampf';
-            ui.showScreen('kampf');
-            _skKey = '';
-            tryFullscreen();
-            skalieren();
-          }
-          // Ende: sofort Endscreen (vorher kurz kampf erzwungen → Flackern)
-          if (letzterSnap && letzterSnap.phase === 'ende') {
-            mode = 'ende';
-            var wonG = letzterSnap.sieger === seite;
-            if (ui.setEnde) ui.setEnde(wonG ? 'GEWONNEN!' : (letzterSnap.sieger != null ? 'VERLOREN!' : 'Ende'), letzterSnap.nachricht || '');
-            ui.showScreen('ende');
+          var st = msg.state;
+          // Veraltetes / out-of-order Paket: nicht eine Frame lang anzeigen und nicht den Endscreen aufreißen.
+          // Countdown (Rematch) bleibt erlaubt — der Tick springt dort bewusst zurück.
+          if (st && letzterSnap && typeof st.tick === 'number' && typeof letzterSnap.tick === 'number'
+              && st.tick < letzterSnap.tick && st.phase !== 'countdown') {
+            /* veraltetes Paket */
+          } else {
+            if (msg.level) {
+              applyLevel(msg.level);
+              if (ui.setLevel) ui.setLevel(msg.level);
+            }
+            if (msg.wetter && Plaza.Render && Plaza.Render.applyWetter) Plaza.Render.applyWetter(msg.wetter);
+            letzterSnap = msg.state;
+            pushInterp(msg.state);
+            if (mode !== 'kampf') {
+              mode = 'kampf';
+              ui.showScreen('kampf');
+              _skKey = '';
+              tryFullscreen();
+              skalieren();
+            }
+            // Ende: sofort Endscreen (vorher kurz kampf erzwungen → Flackern)
+            if (letzterSnap && letzterSnap.phase === 'ende') {
+              mode = 'ende';
+              var wonG = letzterSnap.sieger === seite;
+              if (ui.setEnde) ui.setEnde(wonG ? 'GEWONNEN!' : (letzterSnap.sieger != null ? 'VERLOREN!' : 'Ende'), letzterSnap.nachricht || '');
+              ui.showScreen('ende');
+            }
           }
         }
         if ((msg.typ === 'swap' || msg.typ === 'seat') && mode !== 'kampf' && mode !== 'ende') {
@@ -882,7 +890,7 @@
             if (phaseVorher !== 'ende' || (kampf.endeTimer % 12) === 0) broadcast();
             phaseVorher = 'ende';
           } else {
-            // v4.0: jeden Sim-Tick (~60 Hz). Gast spielt die Ticks mit festem Takt ab,
+            // v4.1: jeden Sim-Tick (~60 Hz). Gast spielt die Ticks mit festem Takt ab,
             // auch wenn die Pakete im selben Frame gebündelt ankommen.
             broadcast();
           }
@@ -907,7 +915,7 @@
       } else if ((mode === 'kampf' || mode === 'ende') && letzterSnap) {
         // Gast: Input-HB dichter (Paketverlust → sonst sticky keys)
         if (mode === 'kampf' && netz && !netz.istHost() && netz.istBereit()) {
-          // v4.0: jeden Frame — Motion-Inputs (↓↘→) dürfen nicht auf 20 Hz zusammenfallen
+          // v4.1: jeden Frame — Motion-Inputs (↓↘→) dürfen nicht auf 20 Hz zusammenfallen
           netz.sende({ typ: 'input', seite: seite, input: lokalInput });
         }
         var view = (!netz.istHost() && !soloMode && mode === 'kampf')
@@ -928,7 +936,7 @@
         }
         acc = 0;
       } else if (mode === 'menue') {
-        Plaza.Render.menueHint(render, 'Versus · Solo · v4.0');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v4.1');
         acc = 0;
       } else {
         Plaza.Render.menueHint(render, statusElText());
@@ -969,7 +977,7 @@
     document.addEventListener('webkitfullscreenchange', function () { updateFsButton(); _skKey = ''; skalieren(); });
     skalieren();
     if ('serviceWorker' in navigator) {
-      try { navigator.serviceWorker.register('sw.js?v=4.0'); } catch (eSw) {}
+      try { navigator.serviceWorker.register('sw.js?v=4.1'); } catch (eSw) {}
     }
     requestAnimationFrame(loop);
   }
