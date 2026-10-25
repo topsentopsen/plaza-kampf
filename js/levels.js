@@ -1,4 +1,4 @@
-/* Plaza-Kampf Levels v3.1+: Dschungel, Brücke, Zerstörte Stadt.
+/* Plaza-Kampf Levels v3.2+: Dschungel, Brücke, Zerstörte Stadt.
  * Wird von render.js über Plaza.Levels.bake(id, api) aufgerufen.
  * api: { backe, werkzeug, rng, LW, H, P, GLUT_DEF }
  */
@@ -103,6 +103,21 @@
       for (i = 0; i < 5; i++) t.R(610 + i * 30, 280, 16, 20, '#3a3428');
       // Neon-ish Moos-Schild
       t.kR(640, 250, 80, 28, '#0a2010');
+      t.R(650, 258, 60, 12, '#40c060');
+      // Statuen / Totems
+      for (i = 0; i < 4; i++) {
+        var tx = 200 + i * 350;
+        t.R(tx, 400, 18, 100, '#2a2018');
+        t.ell(tx + 9, 390, 22, 18, '#3a3020');
+        t.R(tx + 4, 385, 4, 4, '#ff3a08'); t.R(tx + 12, 385, 4, 4, '#ff3a08');
+      }
+      // Papageien-Pixel
+      for (i = 0; i < 8; i++) {
+        var bx = 100 + Math.round(r() * (w - 200));
+        var by = 200 + Math.round(r() * 120);
+        t.R(bx, by, 6, 4, i % 2 ? '#ff3a08' : '#40a0ff');
+        t.R(bx + 6, by + 2, 4, 2, '#ffe080');
+      }
     });
     var L3 = backe(LW, H, function (x, w, h) {
       var t = werkzeug(x), r = rng(504), i;
@@ -209,6 +224,14 @@
       }
       // Nebel in der Tiefe
       for (i = 0; i < 8; i++) t.ell(400 + i * 100, 480, 80, 20, t.pat('#283040', 25));
+      // Treibholz / Wrack unten
+      t.R(520, 500, 120, 10, '#2a2018');
+      t.R(600, 490, 80, 8, '#3a2820');
+      // Felsen mit Augen (Troll)
+      t.ell(100, 380, 50, 40, '#1a1520');
+      t.R(85, 370, 8, 8, '#ff3a08'); t.R(110, 370, 8, 8, '#ff3a08');
+      t.ell(w - 120, 400, 60, 45, '#1a1520');
+      t.R(w - 140, 390, 8, 8, '#ff3a08'); t.R(w - 110, 390, 8, 8, '#ff3a08');
     });
     var L3 = backe(LW, H, function (x, w, h) {
       var t = werkzeug(x), r = rng(604), i;
@@ -348,6 +371,14 @@
       for (i = 0; i < 20; i++) {
         t.R(40 + i * 75, 520, 20 + Math.round(r() * 20), 14, '#2a1c20');
       }
+      // Neon-Schilder
+      t.kR(300, 360, 100, 28, '#1a0810');
+      t.R(310, 368, 80, 12, '#ff3a08');
+      t.kR(980, 340, 120, 28, '#081018');
+      t.R(990, 348, 100, 12, '#40a0ff');
+      // Hydrant
+      t.R(750, 500, 14, 30, '#8a2010');
+      t.ell(757, 498, 12, 8, '#a03018');
     });
     var L4 = backe(LW, H, function (x, w, h) {
       var t = werkzeug(x), r = rng(705), i;

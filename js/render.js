@@ -1,4 +1,4 @@
-/* Pixel-Canvas v3.1: Level-System (Hölle/Dschungel/Brücke/Stadt) + Wetter + Parallax. */
+/* Pixel-Canvas v3.2: Level-System (Hölle/Dschungel/Brücke/Stadt) + Wetter + Parallax. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};

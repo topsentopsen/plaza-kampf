@@ -1,8 +1,8 @@
-/* Einstieg, Spielschleife, Host/Client-Logik. v3.1 — Level-System + Solo. */
+/* Einstieg, Spielschleife, Host/Client-Logik. v3.2 — Level-Detail + Sync. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION = 'v3.1';
+  var VERSION = 'v3.2';
   Plaza.VERSION = VERSION;
   function sanitizeName(n) {
     n = String(n == null ? '' : n).replace(/[\u0000-\u001f<>]/g, '').trim();
@@ -270,7 +270,7 @@
         mode = 'menue';
         ui.showScreen('menue');
         ui.setStatus('');
-        Plaza.Render.menueHint(render, 'Versus · Solo · v3.1');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v3.2');
       },
       onHost: function () {
         soloMode = false;
@@ -515,7 +515,10 @@
           }
         }
         if (msg.typ === 'level' && !netz.istHost()) {
-          if (msg.level) applyLevel(msg.level);
+          if (msg.level) {
+            applyLevel(msg.level);
+            if (ui.setLevel) ui.setLevel(msg.level);
+          }
         }
         if (msg.typ === 'wahl') {
           if (msg.ver && msg.ver !== VERSION) {
@@ -537,7 +540,10 @@
           if (msg.seite === 1) peerInput = msg.input || peerInput;
         }
         if (msg.typ === 'state' && !netz.istHost()) {
-          if (msg.level) applyLevel(msg.level);
+          if (msg.level) {
+            applyLevel(msg.level);
+            if (ui.setLevel) ui.setLevel(msg.level);
+          }
           letzterSnap = msg.state;
           if (mode !== 'kampf') {
             mode = 'kampf';
@@ -733,7 +739,7 @@
         }
         acc = 0;
       } else if (mode === 'menue') {
-        Plaza.Render.menueHint(render, 'Versus · Solo · v3.1');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v3.2');
         acc = 0;
       } else {
         Plaza.Render.menueHint(render, statusElText());

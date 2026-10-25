@@ -1,3 +1,9 @@
+## v3.2 Level-Detail + Sync
+
+Gast übernimmt Host-Arena (UI+Render). Feinschliff der Arenen-Bäcker.
+
+Live: https://topsentopsen.github.io/plaza-kampf/?v=3.2
+
 ## v3.1 Level-System
 
 Vier Arenen wählbar: **Hölle**, **Dschungel**, **Brücke**, **zerstörte Stadt**. Wetter + Parallax bleiben. Host/Solo wählt die Arena im Menü.
