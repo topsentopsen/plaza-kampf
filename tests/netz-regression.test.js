@@ -35,5 +35,5 @@ assert.ok(main.indexOf("kampf.phase !== 'ende'") !== -1, 'Rematch nur aus Ende')
 assert.ok(main.indexOf("typ: 'rematch', ver: VERSION") !== -1, 'Rematch trägt Version');
 
 assert.ok(main.indexOf("typ: 'level'") !== -1 && main.indexOf('onLevel') !== -1);
-assert.ok(main.indexOf('framesDrawn % 6') !== -1, 'Input-HB');
+assert.ok(main.indexOf('framesDrawn % 3') !== -1, 'Input-HB denser');
 console.log('ok — netz-regression.test.js (v=' + Plaza.Netz.VERSION_Q + ')');

@@ -1,4 +1,4 @@
-/* Autoritative Kampfsimulation (Host). v3.8: Backwalk in Block-Stance. */
+/* Autoritative Kampfsimulation (Host). v3.9: Backwalk in Block-Stance. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};

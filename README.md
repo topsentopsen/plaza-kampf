@@ -1,9 +1,7 @@
-## v3.8 Backwalk + Pause-Menü
+## v3.9 Gast-Glättung (Client-Interpolation)
 
-- Rückwärtslaufen in Block-Stance (weg vom Gegner) wieder möglich — kein Facing-Flip.
-- Feste Ingame-Menü-Taste (☰) oben rechts: Pause → Weiter oder Zum Hauptmenü (trennt Netz).
-- Escape öffnet/schließt Pause. Solo/Host-Simulation friert in Pause ein.
+- Ursache hakelig: Host zeichnet lokal 60 Hz, Gast nur Roh-Snapshots (~30 Hz) ohne Zwischenframes.
+- Fix: `js/interp.js` lerpt Positionen zwischen Snapshots (+ kurzes vx-Extrapolieren); Host sendet State jeden Sim-Tick (~60 Hz).
+- Solo, Pause-Menü und Rückwärtslauf unverändert.
 
-Live: https://topsentopsen.github.io/plaza-kampf/?v=3.8
-
-Netz-Client-Glättung bewusst zurückgestellt.
+Live: https://topsentopsen.github.io/plaza-kampf/?v=3.9

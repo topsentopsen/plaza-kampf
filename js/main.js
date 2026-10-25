@@ -1,8 +1,8 @@
-/* Einstieg, Spielschleife, Host/Client-Logik. v3.8 — Backwalk + Pause-Menü. */
+/* Einstieg, Spielschleife, Host/Client-Logik. v3.9 — Gast-Interpolation + 60Hz State. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
-  var VERSION = 'v3.8';
+  var VERSION = 'v3.9';
   Plaza.VERSION = VERSION;
   function sanitizeName(n) {
     n = String(n == null ? '' : n).replace(/[\u0000-\u001f<>]/g, '').trim();
@@ -41,6 +41,22 @@
     var seite = 0;
     var kampf = null;
     var letzterSnap = null;
+    var snapInterp = (Plaza.Interp && Plaza.Interp.erstelle)
+      ? Plaza.Interp.erstelle({ delayMs: 40 })
+      : null;
+    function resetInterp() {
+      if (snapInterp) snapInterp.reset();
+    }
+    function pushInterp(snap) {
+      if (snapInterp && snap) snapInterp.push(snap);
+    }
+    function drawSnap(nowMs) {
+      if (snapInterp && netz && !netz.istHost() && !soloMode) {
+        var sInterp = snapInterp.sample(nowMs);
+        if (sInterp) return sInterp;
+      }
+      return letzterSnap;
+    }
     var netz = null;
     var lokalInput = { l: false, r: false, u: false, d: false, a: false, b: false, c: false };
     var peerInput = { l: false, r: false, u: false, d: false, a: false, b: false, c: false };
@@ -341,6 +357,7 @@
       },
       onMenue: function () {
         paused = false;
+        resetInterp();
         soloMode = false;
         kampf = null;
         letzterSnap = null;
@@ -356,7 +373,7 @@
         ui.showScreen('menue');
         ui.setStatus('');
         if (ui.setPauseBtn) ui.setPauseBtn(false);
-        Plaza.Render.menueHint(render, 'Versus · Solo · v3.8');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v3.9');
       },
       onPause: function () {
         if (mode !== 'kampf' && mode !== 'ende') return;
@@ -382,6 +399,7 @@
       },
       onAbort: function () {
         paused = false;
+        resetInterp();
         // reuse onMenue disconnect path
         soloMode = false;
         kampf = null;
@@ -398,7 +416,7 @@
         ui.showScreen('menue');
         ui.setStatus('Kampf abgebrochen.');
         if (ui.setPauseBtn) ui.setPauseBtn(false);
-        Plaza.Render.menueHint(render, 'Versus · Solo · v3.8');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v3.9');
       },
       onHost: function () {
         soloMode = false;
@@ -557,6 +575,7 @@
       if (Plaza.Sound) Plaza.Sound.resetDiff();
       if (Plaza.Render.resetFx) Plaza.Render.resetFx();
       letzterSnap = Plaza.Kampf.snapshot(kampf);
+      resetInterp();
       ui.setStatus('Testmodus vs CPU — Moves ausprobieren!');
     }
 
@@ -686,6 +705,7 @@
           }
           if (msg.wetter && Plaza.Render && Plaza.Render.applyWetter) Plaza.Render.applyWetter(msg.wetter);
           letzterSnap = msg.state;
+          pushInterp(msg.state);
           if (mode !== 'kampf') {
             mode = 'kampf';
             ui.showScreen('kampf');
@@ -726,6 +746,7 @@
             kampf.countdown = 3;
             kampf.tick = 0;
             clearPeerInput();
+            resetInterp();
             if (Plaza.Sound) Plaza.Sound.resetDiff();
             if (Plaza.Render.resetFx) Plaza.Render.resetFx();
             broadcast();
@@ -788,6 +809,7 @@
           kampf.countdown = 3;
           kampf.tick = 0;
           clearPeerInput();
+          resetInterp();
           if (Plaza.Sound) Plaza.Sound.resetDiff();
           if (Plaza.Render.resetFx) Plaza.Render.resetFx();
           broadcast();
@@ -859,7 +881,8 @@
           if (kampf.phase === 'ende') {
             if (phaseVorher !== 'ende' || (kampf.endeTimer % 12) === 0) broadcast();
             phaseVorher = 'ende';
-          } else if (kampf.tick % 2 === 0) {
+          } else {
+            // v3.9: jeden Sim-Tick (~60 Hz) — Payload ~0.6 KB, Gast interpoliert trotzdem
             broadcast();
           }
         }
@@ -881,13 +904,16 @@
         if (!tabHidden) { Plaza.Render.zeichne(render, letzterSnap, seite); framesDrawn++; } else { framesSkipped++; }
         acc = 0;
       } else if ((mode === 'kampf' || mode === 'ende') && letzterSnap) {
-        // Gast: Input periodisch erneut senden (Paketverlust → sonst sticky keys)
+        // Gast: Input-HB dichter (Paketverlust → sonst sticky keys)
         if (mode === 'kampf' && netz && !netz.istHost() && netz.istBereit()) {
-          if ((framesDrawn % 6) === 0) {
+          if ((framesDrawn % 3) === 0) {
             netz.sende({ typ: 'input', seite: seite, input: lokalInput });
           }
         }
-        if (!tabHidden) { Plaza.Render.zeichne(render, letzterSnap, seite); framesDrawn++; } else { framesSkipped++; }
+        var view = (!netz.istHost() && !soloMode && mode === 'kampf')
+          ? (drawSnap(now) || letzterSnap)
+          : letzterSnap;
+        if (!tabHidden) { Plaza.Render.zeichne(render, view, seite); framesDrawn++; } else { framesSkipped++; }
         if (netDown && Plaza.Render.banner) Plaza.Render.banner(render, 'VERBINDUNG WEG — Nochmal');
         if (letzterSnap.phase === 'ende') {
           if (mode !== 'ende') {
@@ -902,7 +928,7 @@
         }
         acc = 0;
       } else if (mode === 'menue') {
-        Plaza.Render.menueHint(render, 'Versus · Solo · v3.8');
+        Plaza.Render.menueHint(render, 'Versus · Solo · v3.9');
         acc = 0;
       } else {
         Plaza.Render.menueHint(render, statusElText());
@@ -943,7 +969,7 @@
     document.addEventListener('webkitfullscreenchange', function () { updateFsButton(); _skKey = ''; skalieren(); });
     skalieren();
     if ('serviceWorker' in navigator) {
-      try { navigator.serviceWorker.register('sw.js?v=3.8'); } catch (eSw) {}
+      try { navigator.serviceWorker.register('sw.js?v=3.9'); } catch (eSw) {}
     }
     requestAnimationFrame(loop);
   }

@@ -1,4 +1,4 @@
-/* Menü, Charakterwahl, Touch-Steuerung. v3.8 — Pause-Taste + Abbruch. */
+/* Menü, Charakterwahl, Touch-Steuerung. v3.9 — Pause-Taste + Abbruch. */
 (function (g) {
   'use strict';
   var Plaza = g.Plaza = g.Plaza || {};
